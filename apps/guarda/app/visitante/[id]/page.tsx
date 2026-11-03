@@ -1,9 +1,12 @@
 'use client';
 export const dynamic = 'force-dynamic';
+
+import { Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 
-export default function VisitantePage() {
+// Este es el componente interno que usa useParams
+function VisitanteContent() {
   const params = useParams();
   const visitId = params.id as string;
 
@@ -30,5 +33,18 @@ export default function VisitantePage() {
         Generado por Portho 24
       </p>
     </div>
+  );
+}
+
+// Este es el componente que se exporta y envuelve todo en Suspense
+export default function VisitantePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#1E3A5F] flex items-center justify-center text-white">
+        Cargando pase de acceso...
+      </div>
+    }>
+      <VisitanteContent />
+    </Suspense>
   );
 }
