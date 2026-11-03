@@ -9,7 +9,7 @@ const MODULES = [
   { id: 'retiro',   label: 'Entregar Paquete', icon: '✅', color: 'bg-blue-600' },
   { id: 'visitas',  label: 'Crear Visita',     icon: '👤', color: 'bg-indigo-600' },
   { id: 'scan',     label: 'Escanear QR',      icon: '📷', color: 'bg-purple-600' },
-  { id: 'parking',  label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' },
+  { id: 'parking?', label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' }, // <-- Agregamos el ?
   { id: 'admin',    label: 'Central (Admin)',  icon: '🖥️', color: 'bg-slate-800' },
 ];
 

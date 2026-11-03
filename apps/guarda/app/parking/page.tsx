@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
@@ -7,6 +7,8 @@ const TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
 export default function ParkingPage() {
   const router = useRouter();
+  
+  // ESTADOS
   const [placa, setPlaca] = useState('');
   const [torre, setTorre] = useState('Torre A');
   const [apto, setApto] = useState('');
@@ -17,6 +19,17 @@ export default function ParkingPage() {
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [recibo, setRecibo] = useState<any>(null);
+
+  // ESTO LIMPIA LA PANTALLA CADA VEZ QUE SE ENTRA A VEHÍCULOS
+  useEffect(() => {
+    setVehiculo(null);
+    setRecibo(null);
+    setPlaca('');
+    setApto('');
+    setConductor('');
+    setDocConductor('');
+    setFotoVehiculo(null);
+  }, []);
 
   async function handleBuscar(e: React.FormEvent) {
     e.preventDefault();
@@ -90,7 +103,6 @@ export default function ParkingPage() {
     const fakeUnitId = '44444444-4444-4444-4444-444444444401'; 
     
     try {
-      // 1. Subir la foto
       const fileExt = fotoVehiculo.name.split('.').pop();
       const fileName = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
@@ -101,7 +113,6 @@ export default function ParkingPage() {
       
       const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
 
-      // 2. Guardar en base de datos
       const { error } = await supabase
         .from('parking_sessions')
         .insert({
@@ -117,10 +128,12 @@ export default function ParkingPage() {
       if (error) throw error;
 
       alert(`🚗 Vehículo ingresado y foto registrada.\nConductor: ${conductor}`);
-      router.push('/');
+      
+      // RECARGA FORZADA
+      window.location.reload();
+      
     } catch (err: any) {
       setErrorMsg('Error al registrar entrada: ' + err.message);
-    } finally {
       setLoading(false);
     }
   }
@@ -145,10 +158,12 @@ export default function ParkingPage() {
       if (error) throw error;
 
       alert(`✅ Salida registrada. ${monto > 0 ? `Cobro: $${monto.toLocaleString('es-CO')}` : 'Sin cobro (Exento).'}`);
-      router.push('/');
+      
+      // RECARGA FORZADA
+      window.location.reload();
+      
     } catch (err: any) {
       setErrorMsg('Error al registrar salida: ' + err.message);
-    } finally {
       setLoading(false);
     }
   }
@@ -291,7 +306,6 @@ export default function ParkingPage() {
               </label>
             </div>
 
-            {/* BOTÓN BONITO PARA TOMAR LA FOTO */}
             <div>
               <span className="text-sm font-medium text-slate-700 block mb-2">Foto del Vehículo (Placa)</span>
               <label className="flex items-center justify-center w-full h-24 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl appearance-none cursor-pointer hover:border-[#1E3A5F] focus:outline-none">
