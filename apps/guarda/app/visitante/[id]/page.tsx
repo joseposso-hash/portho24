@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 
-// Este es el componente interno que usa useParams
+// 1. Creamos un componente interno que usa el hook
 function VisitanteContent() {
   const params = useParams();
   const visitId = params.id as string;
@@ -35,7 +35,7 @@ function VisitanteContent() {
   );
 }
 
-// Este es el componente que se exporta y envuelve todo en Suspense
+// 2. El componente principal envuelve al interno en un Suspense
 export default function VisitantePage() {
   return (
     <Suspense fallback={
