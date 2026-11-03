@@ -62,20 +62,24 @@ export default function LobbyPage() {
     setErrorMsg(null);
 
     try {
-      // 1. Subir la foto
+      // 1. Subir la foto (SIN upsert para evitar errores de RLS)
       const fileExt = photo.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      
       const { error: uploadError } = await supabase.storage
         .from('evidences')
-        .upload(fileName, photo, { contentType: photo.type });
+        .upload(fileName, photo, { 
+          contentType: photo.type 
+        });
 
       if (uploadError) throw uploadError;
+      
       const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
 
       // 2. Generar PIN
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // 3. Guardar en base de datos con la unidad correcta
+      // 3. Guardar en base de datos
       const { error: dbError } = await supabase.from('packages').insert({
         tenant_id: TENANT_ID,
         recipient_unit_id: unitId,
