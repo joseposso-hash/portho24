@@ -19,7 +19,7 @@ export default function HistorialPage() {
       setLoading(true);
       const [packs, visits, cars] = await Promise.all([
         supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('visits').select('*, visitors(full_name, doc_number)').order('check_in_at', { ascending: false }).limit(100),
+        supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('check_in_at', { ascending: false }).limit(100),
         supabase.from('parking_sessions').select('*, vehicles(plate)').order('check_in_at', { ascending: false }).limit(100)
       ]);
 
@@ -40,7 +40,8 @@ export default function HistorialPage() {
 
   const visitasFiltradas = visitas.filter(v => 
     (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || 
-    (v.visitors as any)?.doc_number?.includes(busqueda)
+    (v.visitors as any)?.doc_number?.includes(busqueda) ||
+    (v.units as any)?.code?.includes(busqueda)
   );
 
   const vehiculosFiltrados = vehiculos.filter(c => 
@@ -122,18 +123,25 @@ export default function HistorialPage() {
               <tr>
                 <th className="px-4 py-3">Visitante</th>
                 <th className="px-4 py-3">Documento</th>
+                <th className="px-4 py-3">Visita a</th> {/* NUEVA COLUMNA */}
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Entrada</th>
                 <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={5} className="p-6 text-center">Cargando...</td></tr> : 
-               visitasFiltradas.length === 0 ? <tr><td colSpan={5} className="p-6 text-center text-slate-400">No se encontraron visitas.</td></tr> :
+              {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
+               visitasFiltradas.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-400">No se encontraron visitas.</td></tr> :
                visitasFiltradas.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium">{(v.visitors as any)?.full_name}</td>
                   <td className="px-4 py-3">{(v.visitors as any)?.doc_number}</td>
+                  
+                  {/* NUEVA CELDA: TORRE Y APTO */}
+                  <td className="px-4 py-3 text-xs font-medium text-slate-700">
+                    {(v.units as any)?.towers?.name} - {(v.units as any)?.code}
+                  </td>
+
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       v.status === 'checked_in' ? 'bg-blue-100 text-blue-800' : 
