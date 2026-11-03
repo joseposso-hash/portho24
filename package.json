@@ -1,0 +1,9 @@
+{
+  "name": "portho24",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter guarda dev",
+    "build": "pnpm --filter guarda build"
+  }
+}
