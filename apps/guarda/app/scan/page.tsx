@@ -11,9 +11,10 @@ export default function ScanPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   
-  // Estados para la foto y el vehículo
+  // Estados para la visita y las fotos
   const [visitaEncontrada, setVisitaEncontrada] = useState<any>(null);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
+  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null); // NUEVO
   const [subiendo, setSubiendo] = useState(false);
   
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
@@ -25,6 +26,7 @@ export default function ScanPage() {
     setIsScanning(true);
     setVisitaEncontrada(null);
     setFotoVisitante(null);
+    setFotoVehiculo(null);
     setScanResult(null);
     setVieneEnVehiculo(false);
     setPlacaVehiculo('');
@@ -41,7 +43,6 @@ export default function ScanPage() {
             html5QrCode.stop();
             setIsScanning(false);
 
-            // Validar en Supabase
             const { data, error } = await supabase
               .from('visits')
               .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))')
@@ -78,77 +79,64 @@ export default function ScanPage() {
               return;
             }
 
-            // SI TODO ESTÁ BIEN, GUARDAMOS LA VISITA PARA PEDIR LA FOTO Y EL VEHÍCULO
             setVisitaEncontrada(data);
           },
-          (errorMessage) => { /* ignorar errores de escaneo continuo */ }
+          (errorMessage) => { /* ignorar */ }
         );
       } catch (err: any) {
-        console.error(err);
         setErrorMsg("No se pudo acceder a la cámara.");
         setIsScanning(false);
       }
     }, 100);
   };
 
-  const handleTomarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setFotoVisitante(file);
-  };
-
   const confirmarIngreso = async () => {
     if (!visitaEncontrada || !fotoVisitante) {
-      setErrorMsg('Debes tomar la foto del visitante para autorizar el ingreso.');
+      setErrorMsg('Debes tomar la foto del visitante.');
       return;
     }
-    if (vieneEnVehiculo && !placaVehiculo) {
-      setErrorMsg('Debes ingresar la placa del vehículo.');
+    if (vieneEnVehiculo && (!placaVehiculo || !fotoVehiculo)) {
+      setErrorMsg('Debes ingresar la placa y tomar la foto del vehículo.');
       return;
     }
 
     setSubiendo(true);
     try {
-      // 1. Subir foto a Storage
-      const fileExt = fotoVisitante.name.split('.').pop();
-      const fileName = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('evidences')
-        .upload(fileName, fotoVisitante, { contentType: fotoVisitante.type });
+      const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
 
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
+      // 1. Subir foto del visitante
+      const fileExtVis = fotoVisitante.name.split('.').pop();
+      const fileNameVis = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVis}`;
+      const { error: errVis } = await supabase.storage.from('evidences').upload(fileNameVis, fotoVisitante, { contentType: fotoVisitante.type });
+      if (errVis) throw errVis;
+      const { data: { publicUrl: urlVis } } = supabase.storage.from('evidences').getPublicUrl(fileNameVis);
 
-      // 2. Actualizar la visita con la foto y el estado checked_in
-      await supabase
-        .from('visits')
-        .update({ 
-          status: 'checked_in', 
-          check_in_at: new Date().toISOString(),
-          photo_url: publicUrl
-        })
-        .eq('id', visitaEncontrada.id);
+      // 2. Actualizar la visita
+      await supabase.from('visits').update({ 
+        status: 'checked_in', 
+        check_in_at: new Date().toISOString(),
+        photo_url: urlVis
+      }).eq('id', visitaEncontrada.id);
 
-      // 3. Si viene en vehículo, registramos la sesión de parqueadero
-      if (vieneEnVehiculo && placaVehiculo) {
-        const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
+      // 3. Si viene en vehículo, registrar en parqueadero
+      if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
         
-        // Buscar o crear el vehículo
-        let { data: veh } = await supabase
-          .from('vehicles')
-          .select('*')
-          .eq('plate', placaVehiculo.toUpperCase())
-          .eq('tenant_id', tenantId)
-          .single();
+        // Subir foto del vehículo
+        const fileExtVeh = fotoVehiculo.name.split('.').pop();
+        const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
+        const { error: errVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
+        if (errVeh) throw errVeh;
+        const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
 
+        // Buscar o crear vehículo
+        let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
+        
         if (!veh) {
-          const { data: newVeh } = await supabase
-            .from('vehicles')
-            .insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo })
-            .select().single();
+          const { data: newVeh } = await supabase.from('vehicles').insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo }).select().single();
           veh = newVeh;
         }
 
-        // Crear la sesión de parqueadero vinculada a la visita
+        // Crear sesión de parqueadero con la foto
         if (veh) {
           await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
@@ -157,7 +145,8 @@ export default function ScanPage() {
             unit_id: (visitaEncontrada.units as any).id,
             status: 'active',
             check_in_at: new Date().toISOString(),
-            notes: `Ingreso con visita: ${(visitaEncontrada.visitors as any).full_name} - Placa: ${placaVehiculo.toUpperCase()}`
+            notes: `Ingreso con visita: ${(visitaEncontrada.visitors as any).full_name}`,
+            photo_url: urlVeh // <-- GUARDAMOS LA FOTO DEL VEHÍCULO
           });
         }
       }
@@ -176,6 +165,7 @@ export default function ScanPage() {
     setErrorMsg(null);
     setVisitaEncontrada(null);
     setFotoVisitante(null);
+    setFotoVehiculo(null);
     setIsScanning(false);
     setVieneEnVehiculo(false);
     setPlacaVehiculo('');
@@ -193,7 +183,6 @@ export default function ScanPage() {
 
       <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl text-slate-900 relative min-h-[400px] flex flex-col items-center justify-center p-4">
         
-        {/* Pantalla de Éxito (Verde) */}
         {scanResult === 'success' && (
           <div className="absolute inset-0 bg-emerald-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
             <span className="text-6xl mb-4">✅</span>
@@ -205,7 +194,6 @@ export default function ScanPage() {
           </div>
         )}
 
-        {/* Pantalla de Error (Rojo) */}
         {!scanResult && errorMsg && !visitaEncontrada && (
           <div className="absolute inset-0 bg-red-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
             <span className="text-6xl mb-4">❌</span>
@@ -217,9 +205,8 @@ export default function ScanPage() {
           </div>
         )}
 
-        {/* PASO INTERMEDIO: TOMAR FOTO Y DATOS DEL VEHÍCULO */}
         {visitaEncontrada && !scanResult && (
-          <div className="w-full p-4 space-y-4">
+          <div className="w-full p-4 space-y-4 overflow-y-auto max-h-[80vh]">
             <div className="text-center">
               <h2 className="text-xl font-bold text-slate-800">Visita Válida</h2>
               <p className="text-sm text-slate-500 mt-1">
@@ -227,64 +214,52 @@ export default function ScanPage() {
               </p>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-amber-800 text-sm text-center">
-              Por seguridad, toma una foto del visitante para registrar su ingreso.
-            </div>
-
+            {/* FOTO DEL VISITANTE */}
             <div>
-              <label className="flex items-center justify-center w-full h-24 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+              <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
-                  <span className="text-3xl">📸</span>
-                  <span className="font-medium text-slate-600 text-sm">
-                    {fotoVisitante ? '✅ Foto capturada (Toca para cambiar)' : 'Toca aquí para tomar la foto'}
+                  <span className="text-2xl">🧑</span>
+                  <span className="font-medium text-slate-600 text-xs">
+                    {fotoVisitante ? '✅ Foto visitante capturada' : 'Tomar foto del visitante'}
                   </span>
                 </span>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  capture="user"
-                  onChange={handleTomarFoto} 
-                  className="hidden" 
-                />
+                <input type="file" accept="image/*" capture="user" onChange={(e) => setFotoVisitante(e.target.files?.[0] || null)} className="hidden" />
               </label>
             </div>
 
             {/* SECCIÓN DE VEHÍCULO */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={vieneEnVehiculo} 
-                  onChange={(e) => setVieneEnVehiculo(e.target.checked)}
-                  className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]"
-                />
+                <input type="checkbox" checked={vieneEnVehiculo} onChange={(e) => setVieneEnVehiculo(e.target.checked)} className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]" />
                 <span className="text-sm font-medium text-slate-700">El visitante viene en vehículo</span>
               </label>
 
               {vieneEnVehiculo && (
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-slate-500">Placa</label>
-                    <input 
-                      type="text" 
-                      value={placaVehiculo} 
-                      onChange={(e) => setPlacaVehiculo(e.target.value.toUpperCase())} 
-                      className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 uppercase" 
-                      placeholder="ABC123" 
-                      maxLength={6}
-                    />
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-500">Placa</label>
+                      <input type="text" value={placaVehiculo} onChange={(e) => setPlacaVehiculo(e.target.value.toUpperCase())} className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 uppercase" placeholder="ABC123" maxLength={6} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Tipo</label>
+                      <select value={tipoVehiculo} onChange={(e) => setTipoVehiculo(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
+                        <option value="car">Carro</option>
+                        <option value="motorcycle">Moto</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-slate-500">Tipo</label>
-                    <select 
-                      value={tipoVehiculo} 
-                      onChange={(e) => setTipoVehiculo(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900"
-                    >
-                      <option value="car">Carro</option>
-                      <option value="motorcycle">Moto</option>
-                    </select>
-                  </div>
+
+                  {/* FOTO DEL VEHÍCULO */}
+                  <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+                    <span className="flex flex-col items-center space-y-1">
+                      <span className="text-2xl">🚗</span>
+                      <span className="font-medium text-slate-600 text-xs">
+                        {fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}
+                      </span>
+                    </span>
+                    <input type="file" accept="image/*" capture="environment" onChange={(e) => setFotoVehiculo(e.target.files?.[0] || null)} className="hidden" />
+                  </label>
                 </div>
               )}
             </div>
@@ -292,34 +267,23 @@ export default function ScanPage() {
             {errorMsg && <p className="text-red-500 text-sm text-center">{errorMsg}</p>}
 
             <div className="flex gap-3 mt-2">
-              <button onClick={resetScanner} className="flex-1 rounded-xl bg-slate-200 py-3 font-semibold text-slate-700">
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmarIngreso} 
-                disabled={!fotoVisitante || subiendo || (vieneEnVehiculo && !placaVehiculo)}
-                className="flex-1 rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white disabled:opacity-50"
-              >
+              <button onClick={resetScanner} className="flex-1 rounded-xl bg-slate-200 py-3 font-semibold text-slate-700">Cancelar</button>
+              <button onClick={confirmarIngreso} disabled={subiendo} className="flex-1 rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white disabled:opacity-50">
                 {subiendo ? 'Guardando...' : 'Autorizar Ingreso'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Escáner o Botón de Inicio */}
         {!scanResult && !errorMsg && !visitaEncontrada && (
           <>
             <div id="reader" className={`w-full max-w-[300px] ${isScanning ? 'block' : 'hidden'}`}></div>
-            
             {!isScanning && (
               <div className="text-center space-y-6">
                 <div className="text-6xl mb-4">📸</div>
                 <h2 className="text-xl font-bold text-slate-800">Cámara apagada</h2>
-                <p className="text-sm text-slate-500">Presiona el botón para encender la cámara y escanear el código QR del visitante.</p>
-                <button 
-                  onClick={startScanner}
-                  className="rounded-xl bg-[#1E3A5F] text-white px-8 py-4 font-bold text-lg hover:bg-[#152945] transition w-full"
-                >
+                <p className="text-sm text-slate-500">Presiona el botón para encender la cámara y escanear el código QR.</p>
+                <button onClick={startScanner} className="rounded-xl bg-[#1E3A5F] text-white px-8 py-4 font-bold text-lg hover:bg-[#152945] transition w-full">
                   Encender Cámara
                 </button>
               </div>

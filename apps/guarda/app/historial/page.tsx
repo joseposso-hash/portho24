@@ -162,7 +162,6 @@ export default function HistorialPage() {
                visitasFiltradas.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-slate-400">No se encontraron visitas.</td></tr> :
                visitasFiltradas.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
-                  {/* FOTO DEL VISITANTE */}
                   <td className="px-4 py-3">
                     {v.photo_url ? (
                       <img src={v.photo_url} alt="Visitante" className="h-10 w-10 object-cover rounded-full shadow-sm" />
@@ -213,6 +212,7 @@ export default function HistorialPage() {
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
+                <th className="px-4 py-3">Foto</th>
                 <th className="px-4 py-3">Placa</th>
                 <th className="px-4 py-3">Conductor / Notas</th>
                 <th className="px-4 py-3">Cobro</th>
@@ -221,10 +221,17 @@ export default function HistorialPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={5} className="p-6 text-center">Cargando...</td></tr> : 
-               vehiculosFiltrados.length === 0 ? <tr><td colSpan={5} className="p-6 text-center text-slate-400">No se encontraron vehículos.</td></tr> :
+              {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
+               vehiculosFiltrados.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-400">No se encontraron vehículos.</td></tr> :
                vehiculosFiltrados.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    {c.photo_url ? (
+                      <img src={c.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
+                    ) : (
+                      <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-400 border border-slate-200">N/A</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-bold text-slate-900">{(c.vehicles as any)?.plate}</td>
                   <td className="px-4 py-3 text-xs font-medium text-slate-700">{c.notes || '-'}</td>
                   <td className="px-4 py-3 font-semibold text-emerald-600">${(c.amount_paid || 0).toLocaleString('es-CO')}</td>
