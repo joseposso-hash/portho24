@@ -19,7 +19,7 @@ export default function HistorialPage() {
       const [packs, visits, cars] = await Promise.all([
         supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('check_in_at', { ascending: false }).limit(100),
-        supabase.from('parking_sessions').select('*, vehicles(plate)').order('check_in_at', { ascending: false }).limit(100)
+        supabase.from('parking_sessions').select('*, vehicles(plate)').order('created_at', { ascending: false }).limit(100)
       ]);
 
       if (packs.data) setPaquetes(packs.data);
