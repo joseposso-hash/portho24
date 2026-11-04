@@ -19,7 +19,7 @@ export default function AdminPQRS() {
     setLoading(true);
     const { data } = await supabase
       .from('pqrs')
-      .select('*')
+      .select('*, units(code, towers(name))')
       .order('created_at', { ascending: false });
     
     if (data) setPqrs(data);
@@ -85,6 +85,7 @@ export default function AdminPQRS() {
               <tr>
                 <th className="px-6 py-4">Tipo</th>
                 <th className="px-6 py-4">Asunto</th>
+                <th className="px-6 py-4">Remitente</th> {/* <-- NUEVA COLUMNA */}
                 <th className="px-6 py-4">Descripción</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Estado</th>
@@ -103,6 +104,12 @@ export default function AdminPQRS() {
                       <span className="font-medium text-slate-800">{p.type}</span>
                     </td>
                     <td className="px-6 py-4 font-medium text-slate-800">{p.subject}</td>
+                    
+                    {/* NUEVA CELDA CON TORRE Y APTO */}
+                    <td className="px-6 py-4 text-xs font-semibold text-[#1E3A5F]">
+                      {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                    </td>
+
                     <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{p.description}</td>
                     <td className="px-6 py-4 text-xs text-slate-500">{new Date(p.created_at).toLocaleDateString()}</td>
                     <td className="px-6 py-4">
