@@ -8,20 +8,27 @@ export default function HistorialPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'vehiculos'>('paquetes');
   
-  // Filtro de fecha: Por defecto, el día de hoy en formato YYYY-MM-DD
-  const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
-  
+  // Estado inicial vacío para evitar error en el servidor de Next.js
+  const [fechaFiltro, setFechaFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
 
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [visitas, setVisitas] = useState<any[]>([]);
   const [vehiculos, setVehiculos] = useState<any[]>([]);
 
+  // 1. Asignar la fecha de hoy cuando el componente se monta en el navegador
   useEffect(() => {
+    const hoy = new Date().toISOString().split('T')[0];
+    setFechaFiltro(hoy);
+  }, []);
+
+  // 2. Cargar los datos solo cuando la fecha ya esté definida
+  useEffect(() => {
+    if (!fechaFiltro) return;
+
     async function cargarDatos() {
       setLoading(true);
       
-      // Creamos los rangos de fecha (desde las 00:00 hasta las 23:59 del día seleccionado)
       const inicioDia = `${fechaFiltro}T00:00:00`;
       const finDia = `${fechaFiltro}T23:59:59`;
 
@@ -52,7 +59,7 @@ export default function HistorialPage() {
     }
     
     cargarDatos();
-  }, [fechaFiltro]); // Se recarga cada vez que cambia la fecha
+  }, [fechaFiltro]);
 
   async function regenerarPin(id: string) {
     if (!confirm('¿Regenerar el PIN para este paquete? El PIN anterior dejará de funcionar.')) return;
