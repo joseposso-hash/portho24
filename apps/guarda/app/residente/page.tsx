@@ -11,7 +11,6 @@ export default function ResidentePage() {
 
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
-  // AHORA TENEMOS 4 PESTAÑAS
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
@@ -30,7 +29,7 @@ export default function ResidentePage() {
   const [enviandoPQRS, setEnviandoPQRS] = useState(false);
   const [misPqrs, setMisPqrs] = useState<any[]>([]);
 
-  // NUEVO: Estado para Comunicados (Muro Social)
+  // Estados para Muro Social
   const [comunicados, setComunicados] = useState<any[]>([]);
 
   useEffect(() => {
@@ -47,7 +46,6 @@ export default function ResidentePage() {
       if (unitData) {
         setMiUnidad(unitData);
         
-        // Cargar paquetes
         const { data: packs } = await supabase
           .from('packages')
           .select('*')
@@ -55,7 +53,6 @@ export default function ResidentePage() {
           .eq('status', 'received')
           .order('created_at', { ascending: false });
 
-        // Cargar visitas
         const { data: vis } = await supabase
           .from('visits')
           .select('*, visitors(full_name, doc_number)')
@@ -63,14 +60,12 @@ export default function ResidentePage() {
           .eq('status', 'authorized')
           .order('created_at', { ascending: false });
 
-        // Cargar PQRS
         const { data: pqrsData } = await supabase
           .from('pqrs')
           .select('*')
           .eq('unit_id', unitData.id)
           .order('created_at', { ascending: false });
 
-        // NUEVO: Cargar Comunicados
         const { data: commData } = await supabase
           .from('comunicados')
           .select('*')
@@ -119,6 +114,7 @@ export default function ResidentePage() {
 
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
+    // Ya los estados nombreVisita y docVisita están llenos por el formulario
     setGenerando(false);
   }
 
@@ -198,7 +194,6 @@ export default function ResidentePage() {
             </select>
           </div>
           
-          {/* AHORA SON 4 PESTAÑAS */}
           <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
             <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📦 Paquetes
@@ -216,7 +211,6 @@ export default function ResidentePage() {
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">
-          {/* PAQUETES */}
           {tab === 'paquetes' && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Mis Paquetes</h2>
@@ -243,7 +237,6 @@ export default function ResidentePage() {
             </div>
           )}
 
-          {/* VISITAS */}
           {tab === 'visitas' && (
             <div>
               {misVisitas.length > 0 && !qrGenerado && (
@@ -255,7 +248,15 @@ export default function ResidentePage() {
                         <p className="text-sm font-semibold text-slate-800">{(v.visitors as any)?.full_name}</p>
                         <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
                       </div>
-                      <button onClick={() => { setQrGenerado(v.id); setNombreVisita((v.visitors as any)?.full_name); setDocVisita((v.visitors as any)?.doc_number); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">
+                      {/* CORRECCIÓN: Seteamos el nombre y documento al ver el QR */}
+                      <button 
+                        onClick={() => { 
+                          setQrGenerado(v.id); 
+                          setNombreVisita((v.visitors as any)?.full_name || ''); 
+                          setDocVisita((v.visitors as any)?.doc_number || ''); 
+                        }} 
+                        className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200"
+                      >
                         Ver QR
                       </button>
                     </div>
@@ -299,7 +300,6 @@ export default function ResidentePage() {
             </div>
           )}
 
-          {/* PQRS */}
           {tab === 'pqrs' && (
             <div className="space-y-6">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Enviar PQRS</h2>
@@ -366,7 +366,6 @@ export default function ResidentePage() {
             </div>
           )}
 
-          {/* MURO SOCIAL (COMUNICADOS) */}
           {tab === 'muro' && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Comunicados</h2>
