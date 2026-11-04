@@ -11,10 +11,9 @@ export default function ScanPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   
-  // Estados para la visita y las fotos
   const [visitaEncontrada, setVisitaEncontrada] = useState<any>(null);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
-  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null); // NUEVO
+  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
@@ -118,7 +117,7 @@ export default function ScanPage() {
         photo_url: urlVis
       }).eq('id', visitaEncontrada.id);
 
-      // 3. Si viene en vehículo, registrar en parqueadero
+      // 3. Registrar el vehículo
       if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
         
         // Subir foto del vehículo
@@ -136,18 +135,25 @@ export default function ScanPage() {
           veh = newVeh;
         }
 
-        // Crear sesión de parqueadero con la foto
+        // Crear sesión de parqueadero con TODOS LOS CAMPOS
         if (veh) {
-          await supabase.from('parking_sessions').insert({
+          const now = new Date().toISOString();
+          const { error: sessionError } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
             visit_id: visitaEncontrada.id,
             unit_id: (visitaEncontrada.units as any).id,
-            status: 'active',
-            check_in_at: new Date().toISOString(),
+            status: 'active',            // ESTADO ACTIVO
+            check_in_at: now,            // FECHA DE ENTRADA
+            created_at: now,             // FECHA DE CREACIÓN (CLAVE PARA EL HISTORIAL)
             notes: `Ingreso con visita: ${(visitaEncontrada.visitors as any).full_name}`,
-            photo_url: urlVeh // <-- GUARDAMOS LA FOTO DEL VEHÍCULO
+            photo_url: urlVeh            // FOTO DEL VEHÍCULO
           });
+
+          if (sessionError) {
+            console.error("Error al crear sesión de parqueadero:", sessionError);
+            throw new Error("No se pudo registrar el vehículo en el parqueadero.");
+          }
         }
       }
 
@@ -214,7 +220,6 @@ export default function ScanPage() {
               </p>
             </div>
 
-            {/* FOTO DEL VISITANTE */}
             <div>
               <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
@@ -227,7 +232,6 @@ export default function ScanPage() {
               </label>
             </div>
 
-            {/* SECCIÓN DE VEHÍCULO */}
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={vieneEnVehiculo} onChange={(e) => setVieneEnVehiculo(e.target.checked)} className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]" />
@@ -250,7 +254,6 @@ export default function ScanPage() {
                     </div>
                   </div>
 
-                  {/* FOTO DEL VEHÍCULO */}
                   <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                     <span className="flex flex-col items-center space-y-1">
                       <span className="text-2xl">🚗</span>
