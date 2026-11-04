@@ -43,6 +43,7 @@ export default function AdminVisitas() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
+                <th className="px-6 py-4">Foto</th> {/* <-- NUEVA COLUMNA */}
                 <th className="px-6 py-4">Visitante</th>
                 <th className="px-6 py-4">Documento</th>
                 <th className="px-6 py-4">Visita a</th>
@@ -51,12 +52,21 @@ export default function AdminVisitas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={5} className="p-8 text-center">Cargando...</td></tr> : 
+              {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
                filtrados.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3 font-medium">{(v.visitors as any)?.full_name}</td>
-                  <td className="px-6 py-3">{(v.visitors as any)?.doc_number}</td>
-                  <td className="px-6 py-3 text-xs font-medium text-slate-700">
+                  {/* CELDA DE LA FOTO */}
+                  <td className="px-6 py-3">
+                    {v.photo_url ? (
+                      <img src={v.photo_url} alt="Visitante" className="h-10 w-10 object-cover rounded-full shadow-sm" />
+                    ) : (
+                      <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
+                    )}
+                  </td>
+                  
+                  <td className="px-6 py-3 font-semibold text-slate-900">{(v.visitors as any)?.full_name}</td>
+                  <td className="px-6 py-3 text-slate-600">{(v.visitors as any)?.doc_number}</td>
+                  <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">
                     {(v.units as any)?.towers?.name} - {(v.units as any)?.code}
                   </td>
                   <td className="px-6 py-3">
@@ -68,7 +78,7 @@ export default function AdminVisitas() {
                       {v.status === 'checked_in' ? 'Adentro' : v.status === 'authorized' ? 'Esperando' : 'Salió'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs">
+                  <td className="px-6 py-3 text-xs text-slate-600">
                     {v.check_in_at ? new Date(v.check_in_at).toLocaleString('es-CO') : 'No ingresó'}
                   </td>
                 </tr>
