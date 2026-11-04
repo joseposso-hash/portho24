@@ -6,23 +6,37 @@ export default function AdminPaquetes() {
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  const [fechaFiltro, setFechaFiltro] = useState('');
+
+  // Inicializar fecha en el cliente para evitar error de prerender
+  useEffect(() => {
+    setFechaFiltro(new Date().toISOString().split('T')[0]);
+  }, []);
 
   useEffect(() => {
+    if (!fechaFiltro) return;
+
     async function cargar() {
+      setLoading(true);
+      const inicio = `${fechaFiltro}T00:00:00`;
+      const fin = `${fechaFiltro}T23:59:59`;
+
       const { data } = await supabase
         .from('packages')
         .select('*, units(code, towers(name))')
+        .gte('created_at', inicio)
+        .lte('created_at', fin)
         .order('created_at', { ascending: false });
+      
       if (data) setPaquetes(data);
       setLoading(false);
     }
     cargar();
-  }, []);
+  }, [fechaFiltro]);
 
   const filtrados = paquetes.filter(p => 
     p.courier?.toLowerCase().includes(busqueda.toLowerCase()) || 
-    p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.pin_hash?.includes(busqueda)
+    p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (
@@ -32,13 +46,24 @@ export default function AdminPaquetes() {
       </header>
 
       <div className="p-8 max-w-6xl mx-auto">
-        <input 
-          type="text" 
-          placeholder="Buscar por courier, guía o PIN..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 mb-6 focus:border-[#1E3A5F] focus:outline-none"
-        />
+        <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
+          <input 
+            type="text" 
+            placeholder="Buscar por courier o guía..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
+          />
+          <div className="relative w-full md:w-auto">
+            <input 
+              type="date" 
+              value={fechaFiltro}
+              onChange={(e) => setFechaFiltro(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
+            />
+            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA</span>
+          </div>
+        </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-left text-sm">
@@ -49,23 +74,28 @@ export default function AdminPaquetes() {
                 <th className="px-6 py-4">Destino</th>
                 <th className="px-6 py-4">PIN</th>
                 <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Fecha</th>
+                <th className="px-6 py-4">Hora</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
+               filtrados.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-6 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
-                  <td className="px-6 py-3 font-medium">{p.courier}<br/><span className="text-xs text-slate-400">{p.tracking_number}</span></td>
-                  <td className="px-6 py-3 text-xs">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
+                  <td className="px-6 py-3 font-semibold text-slate-900">
+                    {p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span>
+                  </td>
+                  <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">
+                    {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                  </td>
                   <td className="px-6 py-3 font-mono text-slate-400">••••••</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                       {p.status === 'received' ? 'Pendiente' : 'Entregado'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs">{new Date(p.created_at).toLocaleString('es-CO')}</td>
+                  <td className="px-6 py-3 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO')}</td>
                 </tr>
               ))}
             </tbody>
