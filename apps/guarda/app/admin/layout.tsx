@@ -71,6 +71,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/directorio" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
             <span className="text-xl">📖</span> {isOpen && <span className="text-sm">Directorio</span>}
           </Link>
+                    <Link href="/admin/reservas" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+            <span className="text-xl">📅</span> {isOpen && <span className="text-sm">Reservas</span>}
+          </Link>
           <Link href="/admin/usuarios" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
             <span className="text-xl">👥</span> {isOpen && <span className="text-sm">Residentes</span>}
           </Link>
