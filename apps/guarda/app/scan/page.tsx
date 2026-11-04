@@ -10,75 +10,130 @@ export default function ScanPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
+  
+  // Estados para la foto
+  const [visitaEncontrada, setVisitaEncontrada] = useState<any>(null);
+  const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
 
   const startScanner = async () => {
     setErrorMsg(null);
     setIsScanning(true);
+    setVisitaEncontrada(null);
+    setFotoVisitante(null);
+    setScanResult(null);
     
-    // Pequeño delay para asegurar que el div esté renderizado
     setTimeout(async () => {
       try {
         const html5QrCode = new Html5Qrcode("reader");
         setScanner(html5QrCode);
 
         await html5QrCode.start(
-          { facingMode: "environment" }, // Usa la cámara trasera si está en celular
+          { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           async (decodedText) => {
-            // Al leer el QR, detenemos la cámara
             html5QrCode.stop();
             setIsScanning(false);
-            setScanResult(decodedText);
-            setErrorMsg(null);
 
             // Validar en Supabase
             const { data, error } = await supabase
               .from('visits')
-              .select('id, status, visitors(full_name)')
+              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(code, towers(name))')
               .eq('id', decodedText)
               .single();
 
             if (error || !data) {
               setErrorMsg('Código QR inválido o no existe.');
-              setScanResult(null);
               return;
+            }
+
+            if (data.status === 'denied' || data.status === 'expired') {
+              setErrorMsg('Esta visita ha sido cancelada o ha expirado.');
+              return;
+            }
+
+            if (data.expires_at && new Date(data.expires_at) < new Date()) {
+              setErrorMsg('El código QR ha expirado.');
+              return;
+            }
+
+            if (data.created_at) {
+              const fechaCreacion = new Date(data.created_at);
+              const hoy = new Date();
+              if (fechaCreacion.getDate() !== hoy.getDate() || fechaCreacion.getMonth() !== hoy.getMonth()) {
+                await supabase.from('visits').update({ status: 'expired' }).eq('id', data.id);
+                setErrorMsg('Este código QR es de un día anterior y ya no es válido.');
+                return;
+              }
             }
 
             if (data.status === 'checked_in') {
               setErrorMsg('Esta visita ya fue registrada anteriormente.');
-              setScanResult(null);
               return;
             }
 
-            // Marcar como checked_in
-            await supabase
-              .from('visits')
-              .update({ status: 'checked_in', check_in_at: new Date().toISOString() })
-              .eq('id', data.id);
-            
-            setScanResult('success');
-            setErrorMsg(`¡Bienvenido, ${(data.visitors as any).full_name}! Entrada registrada.`);
+            // SI TODO ESTÁ BIEN, GUARDAMOS LA VISITA PARA PEDIR LA FOTO
+            setVisitaEncontrada(data);
           },
-          (errorMessage) => {
-            // Errores de escaneo continuo (ignorar)
-          }
+          (errorMessage) => { /* ignorar errores de escaneo continuo */ }
         );
       } catch (err: any) {
         console.error(err);
-        setErrorMsg("No se pudo acceder a la cámara. Revisa los permisos de tu navegador.");
+        setErrorMsg("No se pudo acceder a la cámara.");
         setIsScanning(false);
       }
     }, 100);
   };
 
-  const resetScanner = async () => {
-    if (scanner) {
-      try { await scanner.stop(); } catch (e) {}
+  const handleTomarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setFotoVisitante(file);
+  };
+
+  const confirmarIngreso = async () => {
+    if (!visitaEncontrada || !fotoVisitante) {
+      setErrorMsg('Debes tomar la foto del visitante para autorizar el ingreso.');
+      return;
     }
+
+    setSubiendo(true);
+    try {
+      // 1. Subir foto a Storage
+      const fileExt = fotoVisitante.name.split('.').pop();
+      const fileName = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('evidences')
+        .upload(fileName, fotoVisitante, { contentType: fotoVisitante.type });
+
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
+
+      // 2. Actualizar la visita con la foto y el estado checked_in
+      await supabase
+        .from('visits')
+        .update({ 
+          status: 'checked_in', 
+          check_in_at: new Date().toISOString(),
+          photo_url: publicUrl
+        })
+        .eq('id', visitaEncontrada.id);
+
+      setScanResult('success');
+      setErrorMsg(`¡Bienvenido, ${(visitaEncontrada.visitors as any).full_name}! Acceso registrado.`);
+    } catch (err: any) {
+      setErrorMsg('Error al subir la foto: ' + err.message);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const resetScanner = () => {
     setScanResult(null);
     setErrorMsg(null);
+    setVisitaEncontrada(null);
+    setFotoVisitante(null);
     setIsScanning(false);
-    setScanner(null);
+    if (scanner) { try { scanner.stop(); } catch (e) {} }
   };
 
   return (
@@ -92,7 +147,7 @@ export default function ScanPage() {
 
       <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl text-slate-900 relative min-h-[400px] flex flex-col items-center justify-center p-4">
         
-        {/* Pantalla de Éxito */}
+        {/* Pantalla de Éxito (Verde) */}
         {scanResult === 'success' && (
           <div className="absolute inset-0 bg-emerald-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
             <span className="text-6xl mb-4">✅</span>
@@ -104,8 +159,8 @@ export default function ScanPage() {
           </div>
         )}
 
-        {/* Pantalla de Error */}
-        {!scanResult && errorMsg && (
+        {/* Pantalla de Error (Rojo) */}
+        {!scanResult && errorMsg && !visitaEncontrada && (
           <div className="absolute inset-0 bg-red-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
             <span className="text-6xl mb-4">❌</span>
             <h2 className="text-2xl font-bold mb-2">Acceso Denegado</h2>
@@ -116,8 +171,57 @@ export default function ScanPage() {
           </div>
         )}
 
+        {/* PASO INTERMEDIO: TOMAR FOTO AL VISITANTE */}
+        {visitaEncontrada && !scanResult && (
+          <div className="w-full p-4 space-y-4">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-slate-800">Visita Válida</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {(visitaEncontrada.visitors as any).full_name} → {(visitaEncontrada.units as any).towers.name} - {(visitaEncontrada.units as any).code}
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-amber-800 text-sm text-center">
+              Por seguridad, toma una foto del visitante para registrar su ingreso.
+            </div>
+
+            <div>
+              <label className="flex items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+                <span className="flex flex-col items-center space-y-2">
+                  <span className="text-4xl">📸</span>
+                  <span className="font-medium text-slate-600">
+                    {fotoVisitante ? '✅ Foto capturada (Toca para cambiar)' : 'Toca aquí para tomar la foto'}
+                  </span>
+                </span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="user"
+                  onChange={handleTomarFoto} 
+                  className="hidden" 
+                />
+              </label>
+            </div>
+
+            {errorMsg && <p className="text-red-500 text-sm text-center">{errorMsg}</p>}
+
+            <div className="flex gap-3 mt-4">
+              <button onClick={resetScanner} className="flex-1 rounded-xl bg-slate-200 py-3 font-semibold text-slate-700">
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmarIngreso} 
+                disabled={!fotoVisitante || subiendo}
+                className="flex-1 rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white disabled:opacity-50"
+              >
+                {subiendo ? 'Guardando...' : 'Autorizar Ingreso'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Escáner o Botón de Inicio */}
-        {!scanResult && !errorMsg && (
+        {!scanResult && !errorMsg && !visitaEncontrada && (
           <>
             <div id="reader" className={`w-full max-w-[300px] ${isScanning ? 'block' : 'hidden'}`}></div>
             
