@@ -7,12 +7,12 @@ import { supabase } from '../lib/supabase';
 export default function ResidentePage() {
   const router = useRouter();
   
-  // Estado para el apartamento seleccionado (por defecto 101)
   const [unitCode, setUnitCode] = useState('101'); 
 
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
-  const [tab, setTab] = useState<'paquetes' | 'visitas' | 'pqrs'>('paquetes');
+  // AHORA TENEMOS 4 PESTAÑAS
+  const [tab, setTab] = useState<'paquetes' | 'visitas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
   
@@ -30,7 +30,9 @@ export default function ResidentePage() {
   const [enviandoPQRS, setEnviandoPQRS] = useState(false);
   const [misPqrs, setMisPqrs] = useState<any[]>([]);
 
-  // Cada vez que cambia el unitCode, volvemos a cargar los datos
+  // NUEVO: Estado para Comunicados (Muro Social)
+  const [comunicados, setComunicados] = useState<any[]>([]);
+
   useEffect(() => {
     setLoading(true);
     async function cargarDatos() {
@@ -68,9 +70,16 @@ export default function ResidentePage() {
           .eq('unit_id', unitData.id)
           .order('created_at', { ascending: false });
 
+        // NUEVO: Cargar Comunicados
+        const { data: commData } = await supabase
+          .from('comunicados')
+          .select('*')
+          .order('created_at', { ascending: false });
+
         if (packs) setPaquetes(packs);
         if (vis) setMisVisitas(vis);
         if (pqrsData) setMisPqrs(pqrsData);
+        if (commData) setComunicados(commData);
       } else {
         setMiUnidad(null);
       }
@@ -134,7 +143,6 @@ export default function ResidentePage() {
       setAsuntoPQRS('');
       setDescPQRS('');
       
-      // Recargar la lista de PQRS
       const { data: pqrsData } = await supabase
         .from('pqrs')
         .select('*')
@@ -190,15 +198,19 @@ export default function ResidentePage() {
             </select>
           </div>
           
-          <div className="flex gap-2 bg-white/10 p-1 rounded-xl">
-            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+          {/* AHORA SON 4 PESTAÑAS */}
+          <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
+            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📦 Paquetes
             </button>
-            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               👤 Visitas
             </button>
-            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📝 PQRS
+            </button>
+            <button onClick={() => setTab('muro')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+              📢 Muro
             </button>
           </div>
         </header>
@@ -320,7 +332,6 @@ export default function ResidentePage() {
                 </button>
               </form>
 
-              {/* HISTORIAL DE PQRS Y RESPUESTAS */}
               <div className="mt-8">
                 <h3 className="text-sm font-bold text-slate-700 mb-3">Tus solicitudes anteriores:</h3>
                 {misPqrs.length === 0 ? (
@@ -342,7 +353,6 @@ export default function ResidentePage() {
                         </span>
                       </div>
                       
-                      {/* RESPUESTA DEL ADMINISTRADOR */}
                       {p.response && (
                         <div className="mt-3 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
                           <p className="text-xs font-bold text-emerald-800 mb-1">Respuesta de la Administración:</p>
@@ -353,6 +363,36 @@ export default function ResidentePage() {
                   ))
                 )}
               </div>
+            </div>
+          )}
+
+          {/* MURO SOCIAL (COMUNICADOS) */}
+          {tab === 'muro' && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Comunicados</h2>
+              {comunicados.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <span className="text-5xl mb-2 block">📭</span>
+                  <p>No hay comunicados.</p>
+                </div>
+              ) : (
+                comunicados.map(c => (
+                  <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        c.type === 'alerta' ? 'bg-red-100 text-red-700' :
+                        c.type === 'evento' ? 'bg-purple-100 text-purple-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {c.type}
+                      </span>
+                      <span className="text-xs text-slate-400">{new Date(c.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h3 className="text-md font-bold text-slate-800">{c.title}</h3>
+                    <p className="text-slate-600 text-sm mt-1">{c.content}</p>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </main>

@@ -64,7 +64,8 @@ export default function AdminDashboard() {
       <div className="p-8 max-w-6xl mx-auto space-y-8">
         
         {/* Tarjetas de Métricas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Tarjetas de Métricas */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
             <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-2xl">📦</div>
             <div>
