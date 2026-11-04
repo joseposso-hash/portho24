@@ -59,7 +59,7 @@ export default function AdminPaquetes() {
                   <td className="px-6 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
                   <td className="px-6 py-3 font-medium">{p.courier}<br/><span className="text-xs text-slate-400">{p.tracking_number}</span></td>
                   <td className="px-6 py-3 text-xs">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
-                  <td className="px-6 py-3 font-mono font-bold text-amber-600">{p.pin_hash}</td>
+                  <td className="px-6 py-3 font-mono text-slate-400">••••••</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                       {p.status === 'received' ? 'Pendiente' : 'Entregado'}

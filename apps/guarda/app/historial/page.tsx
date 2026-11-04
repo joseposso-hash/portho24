@@ -31,11 +31,30 @@ export default function HistorialPage() {
     cargarDatos();
   }, []);
 
+  // Función para regenerar el PIN
+  async function regenerarPin(id: string) {
+    if (!confirm('¿Regenerar el PIN para este paquete? El PIN anterior dejará de funcionar.')) return;
+
+    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    const { error } = await supabase
+      .from('packages')
+      .update({ pin_hash: newPin })
+      .eq('id', id);
+
+    if (error) {
+      alert('Error al regenerar: ' + error.message);
+    } else {
+      alert(`✅ Nuevo PIN generado: ${newPin}\n\nDíctalo al residente para que retire su paquete.`);
+      // Recargar la tabla para reflejar el cambio (aunque el PIN esté oculto, actualiza el estado)
+      window.location.reload();
+    }
+  }
+
   // Filtros de búsqueda
   const paquetesFiltrados = paquetes.filter(p => 
     p.courier?.toLowerCase().includes(busqueda.toLowerCase()) || 
-    p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.pin_hash?.includes(busqueda)
+    p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const visitasFiltradas = visitas.filter(v => 
@@ -77,7 +96,7 @@ export default function HistorialPage() {
         
         <input 
           type="text" 
-          placeholder="Buscar por nombre, cédula, placa o PIN..."
+          placeholder="Buscar por nombre, cédula, placa o guía..."
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           className="w-full md:w-80 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
@@ -95,22 +114,40 @@ export default function HistorialPage() {
                 <th className="px-4 py-3">PIN</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={5} className="p-6 text-center">Cargando...</td></tr> : 
-               paquetesFiltrados.length === 0 ? <tr><td colSpan={5} className="p-6 text-center text-slate-400">No se encontraron paquetes.</td></tr> :
+              {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
+               paquetesFiltrados.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-400">No se encontraron paquetes.</td></tr> :
                paquetesFiltrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2"><img src={p.photo_url} className="h-8 w-8 object-cover rounded" /></td>
                   <td className="px-4 py-2 font-medium">{p.courier}<br/><span className="text-xs font-normal text-slate-400">{p.tracking_number}</span></td>
-                  <td className="px-4 py-2 font-mono font-bold text-amber-600">{p.pin_hash}</td>
+                  
+                  {/* PIN OCULTO POR SEGURIDAD */}
+                  <td className="px-4 py-2 font-mono text-slate-400">••••••</td>
+                  
                   <td className="px-4 py-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                       {p.status === 'received' ? 'Pendiente' : 'Entregado'}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-xs">{new Date(p.created_at).toLocaleString('es-CO')}</td>
+                  
+                  {/* BOTÓN DE REGENERAR PIN */}
+                  <td className="px-4 py-2">
+                    {p.status === 'received' ? (
+                      <button 
+                        onClick={() => regenerarPin(p.id)}
+                        className="text-xs bg-amber-100 text-amber-800 px-3 py-1.5 rounded hover:bg-amber-200 font-medium"
+                      >
+                        Regenerar PIN
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -123,7 +160,7 @@ export default function HistorialPage() {
               <tr>
                 <th className="px-4 py-3">Visitante</th>
                 <th className="px-4 py-3">Documento</th>
-                <th className="px-4 py-3">Visita a</th> {/* NUEVA COLUMNA */}
+                <th className="px-4 py-3">Visita a</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Entrada</th>
                 <th className="px-4 py-3">Acciones</th>
@@ -136,12 +173,9 @@ export default function HistorialPage() {
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium">{(v.visitors as any)?.full_name}</td>
                   <td className="px-4 py-3">{(v.visitors as any)?.doc_number}</td>
-                  
-                  {/* NUEVA CELDA: TORRE Y APTO */}
                   <td className="px-4 py-3 text-xs font-medium text-slate-700">
                     {(v.units as any)?.towers?.name} - {(v.units as any)?.code}
                   </td>
-
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       v.status === 'checked_in' ? 'bg-blue-100 text-blue-800' : 
