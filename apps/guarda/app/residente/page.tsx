@@ -11,7 +11,8 @@ export default function ResidentePage() {
 
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
-  const [tab, setTab] = useState<'paquetes' | 'visitas' | 'pqrs' | 'muro'>('paquetes');
+  // AHORA TENEMOS 5 PESTAÑAS
+  const [tab, setTab] = useState<'paquetes' | 'visitas' | 'reservas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
   
@@ -21,6 +22,12 @@ export default function ResidentePage() {
   const [qrGenerado, setQrGenerado] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [misVisitas, setMisVisitas] = useState<any[]>([]);
+
+  // Estados para Reservas
+  const [areas, setAreas] = useState<any[]>([]);
+  const [misReservas, setMisReservas] = useState<any[]>([]);
+  const [reservaForm, setReservaForm] = useState({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
+  const [enviandoReserva, setEnviandoReserva] = useState(false);
 
   // Estados para PQRS
   const [tipoPQRS, setTipoPQRS] = useState('Queja');
@@ -60,6 +67,16 @@ export default function ResidentePage() {
           .eq('status', 'authorized')
           .order('created_at', { ascending: false });
 
+        const { data: areasData } = await supabase
+          .from('areas_comunes')
+          .select('*');
+
+        const { data: reservasData } = await supabase
+          .from('reservas')
+          .select('*, areas_comunes(name, icon)')
+          .eq('unit_id', unitData.id)
+          .order('date', { ascending: true });
+
         const { data: pqrsData } = await supabase
           .from('pqrs')
           .select('*')
@@ -73,6 +90,8 @@ export default function ResidentePage() {
 
         if (packs) setPaquetes(packs);
         if (vis) setMisVisitas(vis);
+        if (areasData) setAreas(areasData);
+        if (reservasData) setMisReservas(reservasData);
         if (pqrsData) setMisPqrs(pqrsData);
         if (commData) setComunicados(commData);
       } else {
@@ -107,7 +126,6 @@ export default function ResidentePage() {
         host_user_id: '31f6292b-6b35-41e4-bea3-11d0e3356fef',
         unit_id: miUnidad.id,
         status: 'authorized',
-        // AGREGAMOS LA EXPIRACIÓN A 24 HORAS
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       })
       .select().single();
@@ -117,6 +135,33 @@ export default function ResidentePage() {
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
     setGenerando(false);
+  }
+
+  async function crearReserva(e: React.FormEvent) {
+    e.preventDefault();
+    if (!miUnidad || !reservaForm.areaId || !reservaForm.date || !reservaForm.startTime) return;
+    setEnviandoReserva(true);
+
+    const { error } = await supabase.from('reservas').insert({
+      tenant_id: miUnidad.towers.tenant_id,
+      area_id: reservaForm.areaId,
+      unit_id: miUnidad.id,
+      date: reservaForm.date,
+      start_time: reservaForm.startTime,
+      end_time: reservaForm.endTime,
+      notes: reservaForm.notes,
+      status: 'pending'
+    });
+
+    if (error) {
+      alert('Error al reservar: ' + error.message);
+    } else {
+      alert('✅ Reserva solicitada. La administración la revisará pronto.');
+      setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
+      const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).order('date', { ascending: true });
+      if (data) setMisReservas(data);
+    }
+    setEnviandoReserva(false);
   }
 
   async function enviarPQRS(e: React.FormEvent) {
@@ -195,17 +240,21 @@ export default function ResidentePage() {
             </select>
           </div>
           
+          {/* 5 PESTAÑAS */}
           <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
-            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📦 Paquetes
             </button>
-            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               👤 Visitas
             </button>
-            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('reservas')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'reservas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+              🏊 Reservas
+            </button>
+            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📝 PQRS
             </button>
-            <button onClick={() => setTab('muro')} className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('muro')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📢 Muro
             </button>
           </div>
@@ -249,33 +298,14 @@ export default function ResidentePage() {
                         <p className="text-sm font-semibold text-slate-800">{(v.visitors as any)?.full_name}</p>
                         <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
                       </div>
-                      
-                      {/* BOTONES DE VER QR Y CANCELAR */}
                       <div className="flex gap-2">
-                        <button 
-                          onClick={() => { 
-                            setQrGenerado(v.id); 
-                            setNombreVisita((v.visitors as any)?.full_name || ''); 
-                            setDocVisita((v.visitors as any)?.doc_number || ''); 
-                          }} 
-                          className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200"
-                        >
+                        <button onClick={() => { setQrGenerado(v.id); setNombreVisita((v.visitors as any)?.full_name || ''); setDocVisita((v.visitors as any)?.doc_number || ''); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">
                           Ver QR
                         </button>
-                        
-                        <button 
-                          onClick={async () => {
-                            if(confirm('¿Seguro que deseas cancelar esta visita?')) {
-                              await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id);
-                              window.location.reload();
-                            }
-                          }}
-                          className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200"
-                        >
+                        <button onClick={async () => { if(confirm('¿Seguro que deseas cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">
                           Cancelar
                         </button>
                       </div>
-
                     </div>
                   ))}
                 </div>
@@ -314,6 +344,73 @@ export default function ResidentePage() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === 'reservas' && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Reservar Zona Común</h2>
+              
+              <form onSubmit={crearReserva} className="space-y-4 bg-white p-4 rounded-xl border border-slate-200">
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Área Común</span>
+                  <select value={reservaForm.areaId} onChange={(e) => setReservaForm({...reservaForm, areaId: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900">
+                    <option value="">Seleccionar área...</option>
+                    {areas.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name} (Cap: {a.capacity})</option>)}
+                  </select>
+                </label>
+                
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Fecha</span>
+                  <input type="date" value={reservaForm.date} onChange={(e) => setReservaForm({...reservaForm, date: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
+                </label>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Hora Inicio</span>
+                    <input type="time" value={reservaForm.startTime} onChange={(e) => setReservaForm({...reservaForm, startTime: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Hora Fin</span>
+                    <input type="time" value={reservaForm.endTime} onChange={(e) => setReservaForm({...reservaForm, endTime: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Notas (opcional)</span>
+                  <input type="text" value={reservaForm.notes} onChange={(e) => setReservaForm({...reservaForm, notes: e.target.value})} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Ej: Cumpleaños" />
+                </label>
+
+                <button type="submit" disabled={enviandoReserva} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">
+                  {enviandoReserva ? 'Solicitando...' : 'Solicitar Reserva'}
+                </button>
+              </form>
+
+              <div className="mt-8">
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Mis Reservas</h3>
+                {misReservas.length === 0 ? (
+                  <p className="text-sm text-slate-400">No tienes reservas.</p>
+                ) : (
+                  misReservas.map(r => (
+                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
+                      <div className="flex justify-between items-start mb-1">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{(r.areas_comunes as any)?.icon} {(r.areas_comunes as any)?.name}</p>
+                          <p className="text-xs text-slate-500">{r.date} · {r.start_time} - {r.end_time}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          r.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
+                          r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                        </span>
+                      </div>
+                      {r.notes && <p className="text-xs text-slate-500 mt-1">Nota: {r.notes}</p>}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
