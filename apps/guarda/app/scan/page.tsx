@@ -11,10 +11,14 @@ export default function ScanPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   
-  // Estados para la foto
+  // Estados para la foto y el vehículo
   const [visitaEncontrada, setVisitaEncontrada] = useState<any>(null);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  
+  const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
+  const [placaVehiculo, setPlacaVehiculo] = useState('');
+  const [tipoVehiculo, setTipoVehiculo] = useState('car');
 
   const startScanner = async () => {
     setErrorMsg(null);
@@ -22,6 +26,8 @@ export default function ScanPage() {
     setVisitaEncontrada(null);
     setFotoVisitante(null);
     setScanResult(null);
+    setVieneEnVehiculo(false);
+    setPlacaVehiculo('');
     
     setTimeout(async () => {
       try {
@@ -38,7 +44,7 @@ export default function ScanPage() {
             // Validar en Supabase
             const { data, error } = await supabase
               .from('visits')
-              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(code, towers(name))')
+              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))')
               .eq('id', decodedText)
               .single();
 
@@ -72,7 +78,7 @@ export default function ScanPage() {
               return;
             }
 
-            // SI TODO ESTÁ BIEN, GUARDAMOS LA VISITA PARA PEDIR LA FOTO
+            // SI TODO ESTÁ BIEN, GUARDAMOS LA VISITA PARA PEDIR LA FOTO Y EL VEHÍCULO
             setVisitaEncontrada(data);
           },
           (errorMessage) => { /* ignorar errores de escaneo continuo */ }
@@ -93,6 +99,10 @@ export default function ScanPage() {
   const confirmarIngreso = async () => {
     if (!visitaEncontrada || !fotoVisitante) {
       setErrorMsg('Debes tomar la foto del visitante para autorizar el ingreso.');
+      return;
+    }
+    if (vieneEnVehiculo && !placaVehiculo) {
+      setErrorMsg('Debes ingresar la placa del vehículo.');
       return;
     }
 
@@ -118,10 +128,44 @@ export default function ScanPage() {
         })
         .eq('id', visitaEncontrada.id);
 
+      // 3. Si viene en vehículo, registramos la sesión de parqueadero
+      if (vieneEnVehiculo && placaVehiculo) {
+        const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
+        
+        // Buscar o crear el vehículo
+        let { data: veh } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('plate', placaVehiculo.toUpperCase())
+          .eq('tenant_id', tenantId)
+          .single();
+
+        if (!veh) {
+          const { data: newVeh } = await supabase
+            .from('vehicles')
+            .insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo })
+            .select().single();
+          veh = newVeh;
+        }
+
+        // Crear la sesión de parqueadero vinculada a la visita
+        if (veh) {
+          await supabase.from('parking_sessions').insert({
+            tenant_id: tenantId,
+            vehicle_id: veh.id,
+            visit_id: visitaEncontrada.id,
+            unit_id: (visitaEncontrada.units as any).id,
+            status: 'active',
+            check_in_at: new Date().toISOString(),
+            notes: `Ingreso con visita: ${(visitaEncontrada.visitors as any).full_name} - Placa: ${placaVehiculo.toUpperCase()}`
+          });
+        }
+      }
+
       setScanResult('success');
       setErrorMsg(`¡Bienvenido, ${(visitaEncontrada.visitors as any).full_name}! Acceso registrado.`);
     } catch (err: any) {
-      setErrorMsg('Error al subir la foto: ' + err.message);
+      setErrorMsg('Error al registrar: ' + err.message);
     } finally {
       setSubiendo(false);
     }
@@ -133,6 +177,8 @@ export default function ScanPage() {
     setVisitaEncontrada(null);
     setFotoVisitante(null);
     setIsScanning(false);
+    setVieneEnVehiculo(false);
+    setPlacaVehiculo('');
     if (scanner) { try { scanner.stop(); } catch (e) {} }
   };
 
@@ -171,7 +217,7 @@ export default function ScanPage() {
           </div>
         )}
 
-        {/* PASO INTERMEDIO: TOMAR FOTO AL VISITANTE */}
+        {/* PASO INTERMEDIO: TOMAR FOTO Y DATOS DEL VEHÍCULO */}
         {visitaEncontrada && !scanResult && (
           <div className="w-full p-4 space-y-4">
             <div className="text-center">
@@ -186,10 +232,10 @@ export default function ScanPage() {
             </div>
 
             <div>
-              <label className="flex items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
-                <span className="flex flex-col items-center space-y-2">
-                  <span className="text-4xl">📸</span>
-                  <span className="font-medium text-slate-600">
+              <label className="flex items-center justify-center w-full h-24 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+                <span className="flex flex-col items-center space-y-1">
+                  <span className="text-3xl">📸</span>
+                  <span className="font-medium text-slate-600 text-sm">
                     {fotoVisitante ? '✅ Foto capturada (Toca para cambiar)' : 'Toca aquí para tomar la foto'}
                   </span>
                 </span>
@@ -203,15 +249,55 @@ export default function ScanPage() {
               </label>
             </div>
 
+            {/* SECCIÓN DE VEHÍCULO */}
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={vieneEnVehiculo} 
+                  onChange={(e) => setVieneEnVehiculo(e.target.checked)}
+                  className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]"
+                />
+                <span className="text-sm font-medium text-slate-700">El visitante viene en vehículo</span>
+              </label>
+
+              {vieneEnVehiculo && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500">Placa</label>
+                    <input 
+                      type="text" 
+                      value={placaVehiculo} 
+                      onChange={(e) => setPlacaVehiculo(e.target.value.toUpperCase())} 
+                      className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 uppercase" 
+                      placeholder="ABC123" 
+                      maxLength={6}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">Tipo</label>
+                    <select 
+                      value={tipoVehiculo} 
+                      onChange={(e) => setTipoVehiculo(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900"
+                    >
+                      <option value="car">Carro</option>
+                      <option value="motorcycle">Moto</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {errorMsg && <p className="text-red-500 text-sm text-center">{errorMsg}</p>}
 
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-3 mt-2">
               <button onClick={resetScanner} className="flex-1 rounded-xl bg-slate-200 py-3 font-semibold text-slate-700">
                 Cancelar
               </button>
               <button 
                 onClick={confirmarIngreso} 
-                disabled={!fotoVisitante || subiendo}
+                disabled={!fotoVisitante || subiendo || (vieneEnVehiculo && !placaVehiculo)}
                 className="flex-1 rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white disabled:opacity-50"
               >
                 {subiendo ? 'Guardando...' : 'Autorizar Ingreso'}
