@@ -7,6 +7,10 @@ export default function AdminPQRS() {
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('all');
 
+  // Estados para el modal de respuesta
+  const [pqrsSeleccionada, setPqrsSeleccionada] = useState<any>(null);
+  const [respuestaTexto, setRespuestaTexto] = useState('');
+
   useEffect(() => {
     cargarPQRS();
   }, []);
@@ -24,7 +28,23 @@ export default function AdminPQRS() {
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
     await supabase.from('pqrs').update({ status: nuevoEstado }).eq('id', id);
-    cargarPQRS(); // Recargar la lista
+    cargarPQRS();
+  }
+
+  async function guardarRespuesta() {
+    if (!pqrsSeleccionada || !respuestaTexto) return;
+    
+    await supabase
+      .from('pqrs')
+      .update({ 
+        response: respuestaTexto,
+        status: 'resolved' // Al responder, se marca como resuelto automáticamente
+      })
+      .eq('id', pqrsSeleccionada.id);
+      
+    setPqrsSeleccionada(null);
+    setRespuestaTexto('');
+    cargarPQRS();
   }
 
   const pqrsFiltrados = filtro === 'all' 
@@ -94,16 +114,26 @@ export default function AdminPQRS() {
                         {p.status === 'pending' ? 'Pendiente' : p.status === 'in_progress' ? 'En Proceso' : 'Resuelto'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 flex items-center gap-2">
                       <select 
                         value={p.status} 
                         onChange={(e) => cambiarEstado(p.id, e.target.value)}
-                        className="text-xs border border-slate-300 rounded p-1 bg-white text-slate-700 outline-none"
+                        className="text-xs border border-slate-300 rounded p-1.5 bg-white text-slate-700 outline-none"
                       >
                         <option value="pending">Pendiente</option>
                         <option value="in_progress">En Proceso</option>
                         <option value="resolved">Resuelto</option>
                       </select>
+
+                      <button 
+                        onClick={() => {
+                          setPqrsSeleccionada(p);
+                          setRespuestaTexto(p.response || '');
+                        }}
+                        className="text-xs bg-[#1E3A5F] text-white px-3 py-1.5 rounded hover:bg-[#152945] font-medium"
+                      >
+                        Responder
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -112,6 +142,47 @@ export default function AdminPQRS() {
           </table>
         </div>
       </div>
+
+      {/* MODAL DE RESPUESTA */}
+      {pqrsSeleccionada && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Responder PQRS</h2>
+            
+            <div className="mb-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <p className="text-sm font-bold text-slate-700">De: {pqrsSeleccionada.type} - {pqrsSeleccionada.subject}</p>
+              <p className="text-sm text-slate-600 mt-1">{pqrsSeleccionada.description}</p>
+            </div>
+            
+            <label className="block mb-4">
+              <span className="text-sm font-medium text-slate-700">Respuesta de la Administración</span>
+              <textarea 
+                value={respuestaTexto}
+                onChange={(e) => setRespuestaTexto(e.target.value)}
+                rows={4}
+                className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900"
+                placeholder="Escribe la solución o respuesta al residente..."
+              />
+            </label>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setPqrsSeleccionada(null)} 
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={guardarRespuesta} 
+                disabled={!respuestaTexto} 
+                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Enviar Respuesta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

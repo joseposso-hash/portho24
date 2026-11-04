@@ -12,21 +12,28 @@ export default function ResidentePage() {
 
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
-  const [tab, setTab] = useState<'paquetes' | 'visitas'>('paquetes');
+  const [tab, setTab] = useState<'paquetes' | 'visitas' | 'pqrs'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
   
+  // Estados para Visitas
   const [nombreVisita, setNombreVisita] = useState('');
   const [docVisita, setDocVisita] = useState('');
   const [qrGenerado, setQrGenerado] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [misVisitas, setMisVisitas] = useState<any[]>([]);
 
+  // Estados para PQRS
+  const [tipoPQRS, setTipoPQRS] = useState('Queja');
+  const [asuntoPQRS, setAsuntoPQRS] = useState('');
+  const [descPQRS, setDescPQRS] = useState('');
+  const [enviandoPQRS, setEnviandoPQRS] = useState(false);
+  const [misPqrs, setMisPqrs] = useState<any[]>([]);
+
   // Cada vez que cambia el unitCode, volvemos a cargar los datos
   useEffect(() => {
     setLoading(true);
     async function cargarDatos() {
-      // Usamos .limit(1) y sacamos el primer elemento del arreglo
       const { data: unitDataArray } = await supabase
         .from('units')
         .select('*, towers(*)')
@@ -38,6 +45,7 @@ export default function ResidentePage() {
       if (unitData) {
         setMiUnidad(unitData);
         
+        // Cargar paquetes
         const { data: packs } = await supabase
           .from('packages')
           .select('*')
@@ -45,6 +53,7 @@ export default function ResidentePage() {
           .eq('status', 'received')
           .order('created_at', { ascending: false });
 
+        // Cargar visitas
         const { data: vis } = await supabase
           .from('visits')
           .select('*, visitors(full_name, doc_number)')
@@ -52,8 +61,16 @@ export default function ResidentePage() {
           .eq('status', 'authorized')
           .order('created_at', { ascending: false });
 
+        // Cargar PQRS
+        const { data: pqrsData } = await supabase
+          .from('pqrs')
+          .select('*')
+          .eq('unit_id', unitData.id)
+          .order('created_at', { ascending: false });
+
         if (packs) setPaquetes(packs);
         if (vis) setMisVisitas(vis);
+        if (pqrsData) setMisPqrs(pqrsData);
       } else {
         setMiUnidad(null);
       }
@@ -96,9 +113,40 @@ export default function ResidentePage() {
     setGenerando(false);
   }
 
+  async function enviarPQRS(e: React.FormEvent) {
+    e.preventDefault();
+    if (!miUnidad) return;
+    setEnviandoPQRS(true);
+
+    const { error } = await supabase.from('pqrs').insert({
+      tenant_id: miUnidad.towers.tenant_id,
+      unit_id: miUnidad.id,
+      type: tipoPQRS,
+      subject: asuntoPQRS,
+      description: descPQRS,
+      status: 'pending'
+    });
+
+    if (error) {
+      alert('Error al enviar: ' + error.message);
+    } else {
+      alert('✅ PQRS enviada correctamente. La administración la revisará pronto.');
+      setAsuntoPQRS('');
+      setDescPQRS('');
+      
+      // Recargar la lista de PQRS
+      const { data: pqrsData } = await supabase
+        .from('pqrs')
+        .select('*')
+        .eq('unit_id', miUnidad.id)
+        .order('created_at', { ascending: false });
+      if (pqrsData) setMisPqrs(pqrsData);
+    }
+    setEnviandoPQRS(false);
+  }
+
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50 font-medium text-slate-500">Cargando App Residente...</div>;
   
-  // Si por alguna razón no encuentra la unidad, mostramos un mensaje pero con el selector disponible para cambiar
   if (!miUnidad) return (
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
@@ -131,7 +179,6 @@ export default function ResidentePage() {
               </div>
             </div>
             
-            {/* SELECTOR PARA EL DEMO */}
             <select 
               className="bg-white/20 text-xs p-1.5 rounded-lg text-white font-medium outline-none cursor-pointer border border-white/10"
               value={unitCode}
@@ -144,16 +191,20 @@ export default function ResidentePage() {
           </div>
           
           <div className="flex gap-2 bg-white/10 p-1 rounded-xl">
-            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               📦 Paquetes
             </button>
-            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
               👤 Visitas
+            </button>
+            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
+              📝 PQRS
             </button>
           </div>
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">
+          {/* PAQUETES */}
           {tab === 'paquetes' && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Mis Paquetes</h2>
@@ -180,6 +231,7 @@ export default function ResidentePage() {
             </div>
           )}
 
+          {/* VISITAS */}
           {tab === 'visitas' && (
             <div>
               {misVisitas.length > 0 && !qrGenerado && (
@@ -232,6 +284,75 @@ export default function ResidentePage() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* PQRS */}
+          {tab === 'pqrs' && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Enviar PQRS</h2>
+              <p className="text-sm text-slate-500 mb-4">Peticiones, Quejas, Reclamos, Sugerencias o Felicitaciones.</p>
+
+              <form onSubmit={enviarPQRS} className="space-y-4">
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Tipo de solicitud</span>
+                  <select value={tipoPQRS} onChange={(e) => setTipoPQRS(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900">
+                    <option value="Peticion">Petición</option>
+                    <option value="Queja">Queja</option>
+                    <option value="Reclamo">Reclamo</option>
+                    <option value="Sugerencia">Sugerencia</option>
+                    <option value="Felicitacion">Felicitación</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Asunto</span>
+                  <input type="text" value={asuntoPQRS} onChange={(e) => setAsuntoPQRS(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Ej: Ruido en el piso 3" />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Descripción</span>
+                  <textarea value={descPQRS} onChange={(e) => setDescPQRS(e.target.value)} required rows={4} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Detalla tu solicitud..." />
+                </label>
+
+                <button type="submit" disabled={enviandoPQRS} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">
+                  {enviandoPQRS ? 'Enviando...' : 'Enviar PQRS a la Administración'}
+                </button>
+              </form>
+
+              {/* HISTORIAL DE PQRS Y RESPUESTAS */}
+              <div className="mt-8">
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Tus solicitudes anteriores:</h3>
+                {misPqrs.length === 0 ? (
+                  <p className="text-sm text-slate-400">No has enviado ninguna solicitud.</p>
+                ) : (
+                  misPqrs.map(p => (
+                    <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{p.subject}</p>
+                          <p className="text-xs text-slate-500">{p.type} · {new Date(p.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          p.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
+                          p.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
+                          'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {p.status === 'pending' ? 'Pendiente' : p.status === 'in_progress' ? 'En Proceso' : 'Resuelto'}
+                        </span>
+                      </div>
+                      
+                      {/* RESPUESTA DEL ADMINISTRADOR */}
+                      {p.response && (
+                        <div className="mt-3 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
+                          <p className="text-xs font-bold text-emerald-800 mb-1">Respuesta de la Administración:</p>
+                          <p className="text-sm text-emerald-700">{p.response}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </main>
