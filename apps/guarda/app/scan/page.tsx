@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
@@ -100,6 +100,8 @@ export default function ScanPage() {
     }
 
     setSubiendo(true);
+    setErrorMsg(null);
+
     try {
       const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
 
@@ -107,35 +109,45 @@ export default function ScanPage() {
       const fileExtVis = fotoVisitante.name.split('.').pop();
       const fileNameVis = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVis}`;
       const { error: errVis } = await supabase.storage.from('evidences').upload(fileNameVis, fotoVisitante, { contentType: fotoVisitante.type });
-      if (errVis) throw errVis;
+      if (errVis) throw new Error("Error subiendo foto del visitante: " + errVis.message);
+      
       const { data: { publicUrl: urlVis } } = supabase.storage.from('evidences').getPublicUrl(fileNameVis);
 
       // 2. Actualizar la visita
-      await supabase.from('visits').update({ 
+      const { error: visitError } = await supabase.from('visits').update({ 
         status: 'checked_in', 
         check_in_at: new Date().toISOString(),
         photo_url: urlVis
       }).eq('id', visitaEncontrada.id);
 
-      // 3. Registrar el vehículo
+      if (visitError) throw new Error("Error actualizando visita: " + visitError.message);
+
+      // 3. Registrar el vehículo (si aplica)
       if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
         
         // Subir foto del vehículo
         const fileExtVeh = fotoVehiculo.name.split('.').pop();
         const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
         const { error: errVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
-        if (errVeh) throw errVeh;
+        if (errVeh) throw new Error("Error subiendo foto del vehículo: " + errVeh.message);
+        
         const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
 
         // Buscar o crear vehículo
         let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
         
         if (!veh) {
-          const { data: newVeh } = await supabase.from('vehicles').insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo }).select().single();
+          const { data: newVeh, error: errNewVeh } = await supabase.from('vehicles').insert({ 
+            tenant_id: tenantId, 
+            plate: placaVehiculo.toUpperCase(), 
+            type: tipoVehiculo 
+          }).select().single();
+          
+          if (errNewVeh) throw new Error("Error creando vehículo: " + errNewVeh.message);
           veh = newVeh;
         }
 
-        // Crear sesión de parqueadero con TODOS LOS CAMPOS
+        // Crear sesión de parqueadero
         if (veh) {
           const now = new Date().toISOString();
           const { error: sessionError } = await supabase.from('parking_sessions').insert({
@@ -143,24 +155,23 @@ export default function ScanPage() {
             vehicle_id: veh.id,
             visit_id: visitaEncontrada.id,
             unit_id: (visitaEncontrada.units as any).id,
-            status: 'active',            // ESTADO ACTIVO
-            check_in_at: now,            // FECHA DE ENTRADA
-            created_at: now,             // FECHA DE CREACIÓN (CLAVE PARA EL HISTORIAL)
+            status: 'active',
+            check_in_at: now,
+            created_at: now,
             notes: `Ingreso con visita: ${(visitaEncontrada.visitors as any).full_name}`,
-            photo_url: urlVeh            // FOTO DEL VEHÍCULO
+            photo_url: urlVeh
           });
 
           if (sessionError) {
-            console.error("Error al crear sesión de parqueadero:", sessionError);
-            throw new Error("No se pudo registrar el vehículo en el parqueadero.");
+            console.error("Error detallado de parking_sessions:", sessionError);
+            throw new Error("Error en parqueadero: " + sessionError.message);
           }
         }
       }
 
       setScanResult('success');
-      setErrorMsg(`¡Bienvenido, ${(visitaEncontrada.visitors as any).full_name}! Acceso registrado.`);
     } catch (err: any) {
-      setErrorMsg('Error al registrar: ' + err.message);
+      setErrorMsg(err.message);
     } finally {
       setSubiendo(false);
     }
@@ -193,7 +204,7 @@ export default function ScanPage() {
           <div className="absolute inset-0 bg-emerald-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
             <span className="text-6xl mb-4">✅</span>
             <h2 className="text-2xl font-bold mb-2">¡Acceso Permitido!</h2>
-            <p className="text-emerald-100 mb-8">{errorMsg}</p>
+            <p className="text-emerald-100 mb-8">El ingreso ha sido registrado correctamente.</p>
             <button onClick={resetScanner} className="rounded-xl bg-white text-emerald-700 px-6 py-3 font-bold w-full">
               Escanear otro
             </button>
@@ -267,7 +278,7 @@ export default function ScanPage() {
               )}
             </div>
 
-            {errorMsg && <p className="text-red-500 text-sm text-center">{errorMsg}</p>}
+            {errorMsg && <p className="text-red-500 text-xs text-center font-medium bg-red-50 p-2 rounded">{errorMsg}</p>}
 
             <div className="flex gap-3 mt-2">
               <button onClick={resetScanner} className="flex-1 rounded-xl bg-slate-200 py-3 font-semibold text-slate-700">Cancelar</button>
