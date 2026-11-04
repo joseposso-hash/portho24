@@ -406,7 +406,12 @@ export default function ResidentePage() {
                           {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
                         </span>
                       </div>
-                      {r.notes && <p className="text-xs text-slate-500 mt-1">Nota: {r.notes}</p>}
+                      {r.notes && <p className="text-xs text-slate-500 mt-1">Mi nota: {r.notes}</p>}
+                      {r.admin_notes && (
+                        <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
+                          <strong>Motivo del rechazo:</strong> {r.admin_notes}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

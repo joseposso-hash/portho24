@@ -21,7 +21,23 @@ export default function AdminReservas() {
   }
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
-    await supabase.from('reservas').update({ status: nuevoEstado }).eq('id', id);
+    let motivo = null;
+    
+    // Si va a rechazar, le pedimos el motivo
+    if (nuevoEstado === 'rejected') {
+      motivo = prompt('Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
+      if (motivo === null) return; // Si cancela el prompt, no hacemos nada
+      if (motivo.trim() === '') {
+        alert('Debes escribir un motivo para rechazar la reserva.');
+        return;
+      }
+    }
+
+    await supabase
+      .from('reservas')
+      .update({ status: nuevoEstado, admin_notes: motivo })
+      .eq('id', id);
+      
     cargarReservas();
   }
 
@@ -61,7 +77,11 @@ export default function AdminReservas() {
                     <td className="px-6 py-3 text-xs text-slate-700">
                       {r.date} <br/> {r.start_time} - {r.end_time}
                     </td>
-                    <td className="px-6 py-3 text-xs text-slate-500">{r.notes || '-'}</td>
+                    <td className="px-6 py-3 text-xs text-slate-500">
+                      {r.notes && <div><strong>Residente:</strong> {r.notes}</div>}
+                      {r.admin_notes && <div className="text-red-600 mt-1"><strong>Admin:</strong> {r.admin_notes}</div>}
+                      {!r.notes && !r.admin_notes && '-'}
+                    </td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         r.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
@@ -74,8 +94,18 @@ export default function AdminReservas() {
                     <td className="px-6 py-3 flex gap-2">
                       {r.status === 'pending' && (
                         <>
-                          <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
-                          <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
+                          <button 
+                            onClick={() => cambiarEstado(r.id, 'approved')} 
+                            className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium"
+                          >
+                            Aprobar
+                          </button>
+                          <button 
+                            onClick={() => cambiarEstado(r.id, 'rejected')} 
+                            className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium"
+                          >
+                            Rechazar
+                          </button>
                         </>
                       )}
                     </td>
