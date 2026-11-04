@@ -106,7 +106,9 @@ export default function ResidentePage() {
         visitor_id: visitor.id,
         host_user_id: '31f6292b-6b35-41e4-bea3-11d0e3356fef',
         unit_id: miUnidad.id,
-        status: 'authorized'
+        status: 'authorized',
+        // AGREGAMOS LA EXPIRACIÓN A 24 HORAS
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       })
       .select().single();
 
@@ -114,7 +116,6 @@ export default function ResidentePage() {
 
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
-    // Ya los estados nombreVisita y docVisita están llenos por el formulario
     setGenerando(false);
   }
 
@@ -248,17 +249,33 @@ export default function ResidentePage() {
                         <p className="text-sm font-semibold text-slate-800">{(v.visitors as any)?.full_name}</p>
                         <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
                       </div>
-                      {/* CORRECCIÓN: Seteamos el nombre y documento al ver el QR */}
-                      <button 
-                        onClick={() => { 
-                          setQrGenerado(v.id); 
-                          setNombreVisita((v.visitors as any)?.full_name || ''); 
-                          setDocVisita((v.visitors as any)?.doc_number || ''); 
-                        }} 
-                        className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200"
-                      >
-                        Ver QR
-                      </button>
+                      
+                      {/* BOTONES DE VER QR Y CANCELAR */}
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => { 
+                            setQrGenerado(v.id); 
+                            setNombreVisita((v.visitors as any)?.full_name || ''); 
+                            setDocVisita((v.visitors as any)?.doc_number || ''); 
+                          }} 
+                          className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200"
+                        >
+                          Ver QR
+                        </button>
+                        
+                        <button 
+                          onClick={async () => {
+                            if(confirm('¿Seguro que deseas cancelar esta visita?')) {
+                              await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id);
+                              window.location.reload();
+                            }
+                          }}
+                          className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+
                     </div>
                   ))}
                 </div>
