@@ -6,33 +6,32 @@ export default function AdminVehiculos() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  // Por defecto, el filtro de fecha estará vacío para mostrar todo
   const [fechaFiltro, setFechaFiltro] = useState('');
 
   useEffect(() => {
-    setFechaFiltro(new Date().toISOString().split('T')[0]);
-  }, []);
-
-  useEffect(() => {
-    if (!fechaFiltro) return;
-
-    async function cargar() {
-      setLoading(true);
-      const inicio = `${fechaFiltro}T00:00:00`;
-      const fin = `${fechaFiltro}T23:59:59`;
-
-      // ⚠️ Usamos created_at para el filtro
-      const { data } = await supabase
-        .from('parking_sessions')
-        .select('*, vehicles(plate), units(code, towers(name))')
-        .gte('created_at', inicio)
-        .lte('created_at', fin)
-        .order('created_at', { ascending: false });
-      
-      if (data) setVehiculos(data);
-      setLoading(false);
-    }
     cargar();
   }, [fechaFiltro]);
+
+  async function cargar() {
+    setLoading(true);
+    
+    let query = supabase
+      .from('parking_sessions')
+      .select('*, vehicles(plate), units(code, towers(name))')
+      .order('created_at', { ascending: false });
+
+    // Si el admin selecciona una fecha, filtramos. Si no, trae todos.
+    if (fechaFiltro) {
+      const inicio = `${fechaFiltro}T00:00:00`;
+      const fin = `${fechaFiltro}T23:59:59`;
+      query = query.gte('created_at', inicio).lte('created_at', fin);
+    }
+
+    const { data } = await query;
+    if (data) setVehiculos(data);
+    setLoading(false);
+  }
 
   const filtrados = vehiculos.filter(v => 
     (v.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()) || 
@@ -78,7 +77,7 @@ export default function AdminVehiculos() {
               onChange={(e) => setFechaFiltro(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
             />
-            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA</span>
+            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA (OPCIONAL)</span>
           </div>
         </div>
 
@@ -98,7 +97,7 @@ export default function AdminVehiculos() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={8} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
+               filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados.</td></tr> :
                filtrados.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
