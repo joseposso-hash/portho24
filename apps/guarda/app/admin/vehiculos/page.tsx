@@ -8,53 +8,53 @@ export default function AdminVehiculos() {
   const [busqueda, setBusqueda] = useState('');
   const [fechaFiltro, setFechaFiltro] = useState('');
 
+  // 1. Asignar la fecha de hoy al montar el componente
   useEffect(() => {
-    cargar();
-  }, [fechaFiltro]);
+    const hoy = new Date().toISOString().split('T')[0];
+    setFechaFiltro(hoy);
+  }, []);
 
-  async function cargar() {
-    setLoading(true);
-    
-    let query = supabase
-      .from('parking_sessions')
-      .select('*, vehicles(plate)')
-      .order('check_in_at', { ascending: false })
-      .limit(100);
+  // 2. Cargar datos cuando la fecha esté lista o cambie
+  useEffect(() => {
+    if (!fechaFiltro) return;
 
-    if (fechaFiltro) {
+    async function cargar() {
+      setLoading(true);
+      
       const inicio = `${fechaFiltro}T00:00:00`;
       const fin = `${fechaFiltro}T23:59:59`;
-      query = query.gte('check_in_at', inicio).lte('check_in_at', fin);
-    }
 
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error("Error cargando vehículos:", error);
-    } else if (data) {
-      setVehiculos(data);
+      const { data, error } = await supabase
+        .from('parking_sessions')
+        .select('*, vehicles(plate)')
+        .gte('check_in_at', inicio)
+        .lte('check_in_at', fin)
+        .order('check_in_at', { ascending: false });
+      
+      if (error) {
+        console.error("Error cargando vehículos:", error);
+      } else if (data) {
+        setVehiculos(data);
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }
+    cargar();
+  }, [fechaFiltro]);
 
   const filtrados = vehiculos.filter(v => 
     (v.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()) || 
     v.notes?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  // Extraer datos limpios de las notas
   const getDatosLimpios = (v: any) => {
     const notes = v.notes || '';
     
-    // Extraer Conductor
     const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
     const conductor = matchCond ? matchCond[1].trim() : '-';
 
-    // Extraer Destino
     const matchDest = notes.match(/Destino:\s*([^-]+)/i);
     const destino = matchDest ? matchDest[1].trim() : 'No especificado';
 
-    // Extraer Foto del Conductor (URL)
     const matchFoto = notes.match(/FotoCond:\s*(https?:\/\/\S+)/i);
     const fotoConductor = matchFoto ? matchFoto[1].trim() : null;
 
@@ -83,7 +83,7 @@ export default function AdminVehiculos() {
               onChange={(e) => setFechaFiltro(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
             />
-            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA (OPCIONAL)</span>
+            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA</span>
           </div>
         </div>
 
@@ -103,7 +103,7 @@ export default function AdminVehiculos() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={8} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados.</td></tr> :
+               filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
                filtrados.map(v => {
                  const datos = getDatosLimpios(v);
                  return (
@@ -117,7 +117,6 @@ export default function AdminVehiculos() {
                     </td>
                     <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
                     <td className="px-4 py-3 text-xs font-medium text-slate-700 flex items-center gap-2">
-                      {/* Si hay foto del conductor, mostramos un mini avatar */}
                       {datos.fotoConductor && (
                         <img src={datos.fotoConductor} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
                       )}
