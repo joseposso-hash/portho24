@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function AdminUsuarios() {
+  // ⚠️ PEGA AQUÍ EL ID DE TERRAZZE 187
+  const TENANT_ID = 'PEGA_AQUI_EL_ID_DE_TERRAZZE';
+
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [torres, setTorres] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Estados para el formulario de nuevo usuario
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [towerId, setTowerId] = useState('');
@@ -22,17 +24,17 @@ export default function AdminUsuarios() {
 
   async function cargarDatos() {
     setLoading(true);
-    // 1. Cargar usuarios residentes
     const { data: userData } = await supabase
       .from('users')
       .select('*, units(code, towers(name))')
+      .eq('tenant_id', TENANT_ID) // <-- FILTRO POR CLIENTE
       .eq('role', 'resident')
       .order('full_name');
     
-    // 2. Cargar torres
     const { data: towerData } = await supabase
       .from('towers')
       .select('*')
+      .eq('tenant_id', TENANT_ID) // <-- FILTRO POR CLIENTE
       .order('name');
 
     if (userData) setUsuarios(userData);
@@ -40,7 +42,6 @@ export default function AdminUsuarios() {
     setLoading(false);
   }
 
-  // Cargar apartamentos cuando se selecciona una torre
   useEffect(() => {
     if (!towerId) {
       setUnits([]);
@@ -63,19 +64,17 @@ export default function AdminUsuarios() {
     setGuardando(true);
 
     try {
-      // 1. Crear el usuario en Auth (Supabase)
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: email,
-        password: 'demo1234', // Contraseña por defecto para el demo
+        password: 'demo1234',
         email_confirm: true,
       });
 
       if (authError) throw authError;
 
-      // 2. Insertar el perfil en la tabla pública 'users'
       const { error: profileError } = await supabase.from('users').insert({
         id: authData.user.id,
-        tenant_id: '11111111-1111-1111-1111-111111111111',
+        tenant_id: TENANT_ID, // <-- VINCULADO AL CLIENTE
         role: 'resident',
         full_name: nombre,
         email: email,
@@ -142,7 +141,6 @@ export default function AdminUsuarios() {
         </div>
       </div>
 
-      {/* MODAL PARA CREAR USUARIO */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">

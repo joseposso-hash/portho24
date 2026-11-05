@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function AdminDirectorio() {
+  // ⚠️ PEGA AQUÍ EL ID DE TERRAZZE 187
+  const TENANT_ID = 'PEGA_AQUI_EL_ID_DE_TERRAZZE'; 
+
   const [torres, setTorres] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
@@ -11,7 +14,6 @@ export default function AdminDirectorio() {
     async function cargarDirectorio() {
       setLoading(true);
       
-      // Consultamos las torres y sus apartamentos, junto con los usuarios asignados a cada uno
       const { data, error } = await supabase
         .from('towers')
         .select(`
@@ -24,6 +26,7 @@ export default function AdminDirectorio() {
             users ( full_name, email )
           )
         `)
+        .eq('tenant_id', TENANT_ID) // <-- FILTRO POR CLIENTE
         .order('name');
 
       if (!error && data) {
@@ -34,7 +37,6 @@ export default function AdminDirectorio() {
     cargarDirectorio();
   }, []);
 
-  // Filtrar por nombre de torre, código de apto o nombre del residente
   const torresFiltradas = torres.map(torre => {
     const unitsFiltradas = torre.units.filter((unit: any) => {
       const matchApto = unit.code.toLowerCase().includes(busqueda.toLowerCase());
@@ -48,14 +50,9 @@ export default function AdminDirectorio() {
     <div className="flex-1 overflow-y-auto">
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
         <h1 className="text-xl font-bold text-slate-800">Directorio de Unidades</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-500">Conjunto Los Robles</span>
-        </div>
       </header>
 
       <div className="p-8 max-w-6xl mx-auto">
-        
-        {/* Buscador */}
         <div className="mb-6">
           <input 
             type="text" 
@@ -66,7 +63,6 @@ export default function AdminDirectorio() {
           />
         </div>
 
-        {/* Listado por Torres */}
         {loading ? (
           <div className="text-center text-slate-400 py-10">Cargando directorio...</div>
         ) : (
@@ -91,7 +87,7 @@ export default function AdminDirectorio() {
                       <tr><td colSpan={4} className="px-6 py-4 text-center text-slate-400">Sin apartamentos registrados.</td></tr>
                     ) : (
                       torre.units.map((unit: any) => {
-                        const residente = unit.users?.[0]; // Tomamos el primer residente asignado
+                        const residente = unit.users?.[0];
                         return (
                           <tr key={unit.id} className="hover:bg-slate-50">
                             <td className="px-6 py-4 font-medium text-slate-800">{unit.code}</td>
