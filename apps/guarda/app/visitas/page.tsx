@@ -13,8 +13,7 @@ export default function VisitasPage() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [towers, setTowers] = useState<any[]>([]);
-  const [towerId, setTowerId] = useState('');
+  // Solo necesitamos las casas (units), no las torres
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
@@ -33,26 +32,21 @@ export default function VisitasPage() {
       
       if (profile) {
         setTenantId(profile.tenant_id);
-        const { data } = await supabase.from('towers').select('id, name').eq('tenant_id', profile.tenant_id).order('name');
-        if (data) setTowers(data);
+        // Cargar TODAS las casas del cliente
+        const { data } = await supabase
+          .from('units')
+          .select('id, code')
+          .order('code');
+        if (data) setUnits(data);
       }
     }
     init();
   }, []);
 
-  useEffect(() => {
-    if (!towerId) { setUnits([]); setUnitId(''); return; }
-    async function cargarUnidades() {
-      const { data } = await supabase.from('units').select('id, code').eq('tower_id', towerId).order('code');
-      if (data) setUnits(data);
-    }
-    cargarUnidades();
-  }, [towerId]);
-
   async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
-      setErrorMsg('Por favor, llena los datos y selecciona la casa/apartamento.');
+      setErrorMsg('Por favor, llena los datos y selecciona la casa.');
       return;
     }
     
@@ -117,7 +111,7 @@ export default function VisitasPage() {
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            notes: `Visita no anunciada: ${nombre}`,
+            notes: `Visita no anunciada: ${nombre} - Destino: Casa ${unitSearch}`,
             photo_url: urlVeh
           });
         }
@@ -156,26 +150,27 @@ export default function VisitasPage() {
             </label>
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">Torre / Manzana</span>
-                  <select value={towerId} onChange={(e) => setTowerId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" required>
-                    <option value="">Seleccionar...</option>
-                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">Casa / Unidad</span>
-                  <input type="text" list="lista-casas-visita" value={unitSearch} onChange={(e) => {
+              <p className="text-sm font-bold text-slate-800">📍 Destino de la visita</p>
+              
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600">Casa / Unidad</span>
+                <input 
+                  type="text" 
+                  list="lista-casas-visita" 
+                  value={unitSearch} 
+                  onChange={(e) => {
                     setUnitSearch(e.target.value);
                     const found = units.find(u => u.code.toLowerCase() === e.target.value.toLowerCase());
                     setUnitId(found ? found.id : '');
-                  }} placeholder="Ej: 25" className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" required />
-                  <datalist id="lista-casas-visita">
-                    {units.map(u => <option key={u.id} value={u.code} />)}
-                  </datalist>
-                </label>
-              </div>
+                  }} 
+                  placeholder="Escribe la casa (ej. 125)" 
+                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" 
+                  required 
+                />
+                <datalist id="lista-casas-visita">
+                  {units.map(u => <option key={u.id} value={u.code} />)}
+                </datalist>
+              </label>
             </div>
 
             <div>
@@ -234,7 +229,7 @@ export default function VisitasPage() {
           <div className="text-center space-y-6 py-8">
             <div className="mx-auto h-20 w-20 bg-emerald-100 rounded-full flex items-center justify-center text-4xl">✅</div>
             <h2 className="text-2xl font-bold text-slate-900">Ingreso Registrado</h2>
-            <button onClick={() => { setSuccess(false); setNombre(''); setDocumento(''); setUnitId(''); setTowerId(''); setVieneEnVehiculo(false); setPlacaVehiculo(''); setFotoVisitante(null); setFotoVehiculo(null); }} className="mt-4 rounded-xl bg-[#1E3A5F] px-6 py-3 font-semibold text-white hover:bg-[#152945]">Registrar otra visita</button>
+            <button onClick={() => { setSuccess(false); setNombre(''); setDocumento(''); setUnitId(''); setUnitSearch(''); setVieneEnVehiculo(false); setPlacaVehiculo(''); setFotoVisitante(null); setFotoVehiculo(null); }} className="mt-4 rounded-xl bg-[#1E3A5F] px-6 py-3 font-semibold text-white hover:bg-[#152945]">Registrar otra visita</button>
           </div>
         )}
       </div>

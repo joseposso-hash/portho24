@@ -8,7 +8,6 @@ export default function ParkingPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [placa, setPlaca] = useState('');
-  const [torre, setTorre] = useState(''); // En casas, no suele haber torre, pero lo dejamos por compatibilidad
   const [apto, setApto] = useState('');
   const [conductor, setConductor] = useState('');
   const [docConductor, setDocConductor] = useState('');
@@ -95,13 +94,14 @@ export default function ParkingPage() {
         vehicle_id: vehiculo.id,
         status: 'active',
         check_in_at: new Date().toISOString(),
-        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: ${torre} ${apto}`,
+        created_at: new Date().toISOString(),
+        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: Casa ${apto}`,
         photo_url: publicUrl
       });
 
       if (error) throw error;
 
-      alert(`🚗 Vehículo ingresado.\nConductor: ${conductor}`);
+      alert(`🚗 Vehículo ingresado.\nConductor: ${conductor}\nDestino: Casa ${apto}`);
       window.location.reload();
     } catch (err: any) {
       setErrorMsg('Error al registrar entrada: ' + err.message);
@@ -171,14 +171,16 @@ export default function ParkingPage() {
             </div>
             {errorMsg && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>}
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Torre / Manzana</span>
-                <input type="text" value={torre} onChange={(e) => setTorre(e.target.value)} placeholder="Ej: Manzana 1" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Casa / Apto</span>
-                <input type="text" value={apto} onChange={(e) => setApto(e.target.value)} placeholder="Ej: 25" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
+                <span className="text-sm font-medium text-slate-700">Casa / Unidad Destino</span>
+                <input 
+                  type="text" 
+                  value={apto} 
+                  onChange={(e) => setApto(e.target.value)} 
+                  placeholder="Ej: 125" 
+                  className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" 
+                />
               </label>
             </div>
 
