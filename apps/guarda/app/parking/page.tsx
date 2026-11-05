@@ -11,7 +11,11 @@ export default function ParkingPage() {
   const [apto, setApto] = useState('');
   const [conductor, setConductor] = useState('');
   const [docConductor, setDocConductor] = useState('');
+  
+  // NUEVOS ESTADOS PARA LAS FOTOS
+  const [fotoConductor, setFotoConductor] = useState<File | null>(null);
   const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null); 
+  
   const [loading, setLoading] = useState(false);
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -74,29 +78,37 @@ export default function ParkingPage() {
   }
 
   async function confirmarEntrada() {
-    if (!apto || !conductor || !docConductor || !fotoVehiculo || !tenantId) {
-      setErrorMsg('Por favor, completa los datos y toma una foto del vehículo.');
+    if (!apto || !conductor || !docConductor || !fotoConductor || !fotoVehiculo || !tenantId) {
+      setErrorMsg('Por favor, completa los datos y toma ambas fotos.');
       return;
     }
     
     setLoading(true);
     
     try {
-      const fileExt = fotoVehiculo.name.split('.').pop();
-      const fileName = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('evidences').upload(fileName, fotoVehiculo, { contentType: fotoVehiculo.type });
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
+      // 1. Subir Foto del Conductor
+      const fileExtCond = fotoConductor.name.split('.').pop();
+      const fileNameCond = `conductores/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtCond}`;
+      const { error: errUpCond } = await supabase.storage.from('evidences').upload(fileNameCond, fotoConductor, { contentType: fotoConductor.type });
+      if (errUpCond) throw errUpCond;
+      const { data: { publicUrl: urlConductor } } = supabase.storage.from('evidences').getPublicUrl(fileNameCond);
 
+      // 2. Subir Foto del Vehículo
+      const fileExtVeh = fotoVehiculo.name.split('.').pop();
+      const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
+      const { error: errUpVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
+      if (errUpVeh) throw errUpVeh;
+      const { data: { publicUrl: urlVehiculo } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
+
+      // 3. Guardar en base de datos (usamos photo_url para el vehículo y guardamos la del conductor en notes por ahora)
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
         status: 'active',
         check_in_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
-        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: Casa ${apto}`,
-        photo_url: publicUrl
+        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: Casa ${apto} - FotoCond: ${urlConductor}`,
+        photo_url: urlVehiculo
       });
 
       if (error) throw error;
@@ -174,13 +186,7 @@ export default function ParkingPage() {
             <div className="grid grid-cols-1 gap-4">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Casa / Unidad Destino</span>
-                <input 
-                  type="text" 
-                  value={apto} 
-                  onChange={(e) => setApto(e.target.value)} 
-                  placeholder="Ej: 125" 
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" 
-                />
+                <input type="text" value={apto} onChange={(e) => setApto(e.target.value)} placeholder="Ej: 125" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required />
               </label>
             </div>
 
@@ -195,13 +201,28 @@ export default function ParkingPage() {
               </label>
             </div>
 
+            {/* FOTO DEL CONDUCTOR */}
+            <div>
+              <span className="text-sm font-medium text-slate-700 block mb-2">Foto del Conductor</span>
+              <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+                <span className="flex flex-col items-center space-y-1">
+                  <span className="text-2xl">🧑</span>
+                  <span className="font-medium text-slate-600 text-xs">
+                    {fotoConductor ? '✅ Foto conductor capturada' : 'Tomar foto del conductor'}
+                  </span>
+                </span>
+                <input type="file" accept="image/*" capture="user" onChange={(e) => setFotoConductor(e.target.files?.[0] || null)} className="hidden" />
+              </label>
+            </div>
+
+            {/* FOTO DEL VEHÍCULO */}
             <div>
               <span className="text-sm font-medium text-slate-700 block mb-2">Foto del Vehículo</span>
-              <label className="flex items-center justify-center w-full h-24 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
+              <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
-                  <span className="text-3xl">📸</span>
+                  <span className="text-2xl">🚗</span>
                   <span className="font-medium text-slate-600 text-xs">
-                    {fotoVehiculo ? '✅ Foto capturada' : 'Toca aquí para tomar la foto'}
+                    {fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}
                   </span>
                 </span>
                 <input type="file" accept="image/*" capture="environment" onChange={(e) => setFotoVehiculo(e.target.files?.[0] || null)} className="hidden" />
