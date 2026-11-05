@@ -47,7 +47,19 @@ export default function GuardaHome() {
     const eventos: any[] = [];
     packs.data?.forEach(p => eventos.push({ tipo: '📦 Paquete', texto: `${p.courier} (${p.status === 'received' ? 'Recibido' : 'Entregado'})`, fecha: p.created_at }));
     visits.data?.forEach((v: any) => eventos.push({ tipo: '👤 Visita', texto: `${v.visitors?.full_name || 'Visitante'}`, fecha: v.check_in_at }));
-    cars.data?.forEach((c: any) => eventos.push({ tipo: '🚗 Vehículo', texto: `Placa ${c.vehicles?.plate || 'N/A'}`, fecha: c.check_in_at }));
+    cars.data?.forEach((c: any) => {
+  // Intentar extraer el destino de las notas (ej: "Destino: Manzana 1 25")
+  let destino = '';
+  if (c.notes) {
+    const match = c.notes.match(/Destino:\s*(.+)/i);
+    if (match) destino = ` → ${match[1]}`;
+  }
+  eventos.push({ 
+    tipo: '🚗 Vehículo', 
+    texto: `Placa ${c.vehicles?.plate || 'N/A'}${destino}`, 
+    fecha: c.check_in_at 
+  });
+});
 
     eventos.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
     setActividad(eventos);

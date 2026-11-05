@@ -22,7 +22,7 @@ export default function AdminVehiculos() {
 
       const { data } = await supabase
         .from('parking_sessions')
-        .select('*, vehicles(plate)')
+        .select('*, vehicles(plate), units(code, towers(name))') // <-- Aseguramos traer la unidad si existe
         .gte('created_at', inicio)
         .lte('created_at', fin)
         .order('created_at', { ascending: false });
@@ -38,6 +38,29 @@ export default function AdminVehiculos() {
     v.notes?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  // Función para extraer el destino de las notas
+  const getDestino = (v: any) => {
+    if (v.notes) {
+      const match = v.notes.match(/Destino:\s*(.+)/i);
+      if (match) return match[1];
+      // Si es una visita, las notas dicen "Visita: [Nombre] - Destino: [Torre/Casa]"
+      const matchVisita = v.notes.match(/Destino:\s*(.+)/i);
+      if (matchVisita) return matchVisita[1];
+    }
+    if (v.units) {
+      return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
+    }
+    return 'No especificado';
+  };
+
+  const getConductor = (v: any) => {
+    if (v.notes) {
+      const match = v.notes.match(/Conductor:\s*([^-]+)/i);
+      if (match) return match[1].trim();
+    }
+    return '-';
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
@@ -48,7 +71,7 @@ export default function AdminVehiculos() {
         <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
           <input 
             type="text" 
-            placeholder="Buscar por placa o notas..."
+            placeholder="Buscar por placa o conductor..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
@@ -70,15 +93,16 @@ export default function AdminVehiculos() {
               <tr>
                 <th className="px-6 py-4">Foto</th>
                 <th className="px-6 py-4">Placa</th>
-                <th className="px-6 py-4">Notas</th>
+                <th className="px-6 py-4">Conductor</th>
+                <th className="px-6 py-4">Destino (Casa/Apto)</th> {/* <-- NUEVA COLUMNA */}
                 <th className="px-6 py-4">Cobro</th>
                 <th className="px-6 py-4">Estado</th>
                 <th className="px-6 py-4">Hora</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
+              {loading ? <tr><td colSpan={7} className="p-8 text-center">Cargando...</td></tr> : 
+               filtrados.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
                filtrados.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td className="px-6 py-3">
@@ -89,7 +113,8 @@ export default function AdminVehiculos() {
                     )}
                   </td>
                   <td className="px-6 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
-                  <td className="px-6 py-3 text-xs font-medium text-slate-700">{v.notes || '-'}</td>
+                  <td className="px-6 py-3 text-xs font-medium text-slate-700">{getConductor(v)}</td>
+                  <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">{getDestino(v)}</td> {/* <-- CELDA DESTINO */}
                   <td className="px-6 py-3 font-semibold text-emerald-600">${(v.amount_paid || 0).toLocaleString('es-CO')}</td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
