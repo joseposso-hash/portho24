@@ -15,26 +15,40 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function cargarDatos() {
-      // 1. Paquetes pendientes
+      // 1. Obtener el tenant_id del usuario logueado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile) return;
+      const tenantId = profile.tenant_id;
+
+      // 2. Cargar datos filtrados por el tenant del admin
       const { data: packData } = await supabase
         .from('packages')
         .select('*, units(code, towers(name))')
+        .eq('tenant_id', tenantId) // <-- FILTRO
         .eq('status', 'received')
         .order('created_at', { ascending: false })
         .limit(5);
       
-      // 2. Visitas activas
       const { data: visitData } = await supabase
         .from('visits')
         .select('*, visitors(full_name), units(code, towers(name))')
+        .eq('tenant_id', tenantId) // <-- FILTRO
         .eq('status', 'checked_in')
         .order('check_in_at', { ascending: false })
         .limit(5);
 
-      // 3. Vehículos activos
       const { data: parkingData } = await supabase
         .from('parking_sessions')
         .select('id')
+        .eq('tenant_id', tenantId) // <-- FILTRO
         .eq('status', 'active');
 
       setStats({
@@ -52,20 +66,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Topbar */}
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
         <h1 className="text-xl font-bold text-slate-800">Resumen General</h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-500">Conjunto Los Robles</span>
+          <span className="text-sm text-slate-500">Mi Conjunto</span>
           <div className="h-8 w-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs">AD</div>
         </div>
       </header>
 
       <div className="p-8 max-w-6xl mx-auto space-y-8">
-        
-        {/* Tarjetas de Métricas */}
-                {/* Tarjetas de Métricas */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex items-center gap-4">
             <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-2xl">📦</div>
             <div>
@@ -89,10 +99,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tablas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Últimos Paquetes */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <h2 className="font-bold text-slate-800">Últimos paquetes recibidos</h2>
@@ -100,6 +107,7 @@ export default function AdminDashboard() {
             <table className="w-full text-left text-sm">
               <tbody className="divide-y divide-slate-100">
                 {loading ? <tr><td className="p-5 text-center text-slate-400">Cargando...</td></tr> : 
+                 ultimosPaquetes.length === 0 ? <tr><td className="p-5 text-center text-slate-400">No hay paquetes.</td></tr> :
                  ultimosPaquetes.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="p-4 w-12"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
@@ -107,16 +115,12 @@ export default function AdminDashboard() {
                       <p className="font-medium text-slate-800">{p.courier}</p>
                       <p className="text-xs text-slate-500">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</p>
                     </td>
-                    <td className="p-4 text-right">
-                      <span className="font-mono font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded text-xs">{p.pin_hash}</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Visitas Activas */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <h2 className="font-bold text-slate-800">Visitas dentro del conjunto</h2>
@@ -124,21 +128,18 @@ export default function AdminDashboard() {
             <table className="w-full text-left text-sm">
               <tbody className="divide-y divide-slate-100">
                 {loading ? <tr><td className="p-5 text-center text-slate-400">Cargando...</td></tr> : 
+                 visitasActivas.length === 0 ? <tr><td className="p-5 text-center text-slate-400">No hay visitas.</td></tr> :
                  visitasActivas.map(v => (
                   <tr key={v.id} className="hover:bg-slate-50">
                     <td className="p-4">
                       <p className="font-medium text-slate-800">{(v.visitors as any)?.full_name}</p>
                       <p className="text-xs text-slate-500">Visita a: {(v.units as any)?.towers?.name} - {(v.units as any)?.code}</p>
                     </td>
-                    <td className="p-4 text-right">
-                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Adentro</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
         </div>
       </div>
     </div>

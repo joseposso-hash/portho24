@@ -12,9 +12,17 @@ export default function AdminReservas() {
 
   async function cargarReservas() {
     setLoading(true);
+    
+    // Obtener tenant del usuario
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
+    if (!profile) return;
+
     const { data } = await supabase
       .from('reservas')
       .select('*, areas_comunes(name, icon), units(code, towers(name))')
+      .eq('tenant_id', profile.tenant_id) // <-- FILTRO
       .order('date', { ascending: false });
     if (data) setReservas(data);
     setLoading(false);
@@ -22,22 +30,16 @@ export default function AdminReservas() {
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
     let motivo = null;
-    
-    // Si va a rechazar, le pedimos el motivo
     if (nuevoEstado === 'rejected') {
       motivo = prompt('Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
-      if (motivo === null) return; // Si cancela el prompt, no hacemos nada
+      if (motivo === null) return;
       if (motivo.trim() === '') {
         alert('Debes escribir un motivo para rechazar la reserva.');
         return;
       }
     }
 
-    await supabase
-      .from('reservas')
-      .update({ status: nuevoEstado, admin_notes: motivo })
-      .eq('id', id);
-      
+    await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
     cargarReservas();
   }
 
@@ -94,18 +96,8 @@ export default function AdminReservas() {
                     <td className="px-6 py-3 flex gap-2">
                       {r.status === 'pending' && (
                         <>
-                          <button 
-                            onClick={() => cambiarEstado(r.id, 'approved')} 
-                            className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium"
-                          >
-                            Aprobar
-                          </button>
-                          <button 
-                            onClick={() => cambiarEstado(r.id, 'rejected')} 
-                            className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium"
-                          >
-                            Rechazar
-                          </button>
+                          <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
+                          <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
                         </>
                       )}
                     </td>

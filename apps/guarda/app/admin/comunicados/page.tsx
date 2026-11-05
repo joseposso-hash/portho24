@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 export default function AdminComunicados() {
   const [comunicados, setComunicados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -12,34 +13,45 @@ export default function AdminComunicados() {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    cargarComunicados();
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
+      
+      if (profile) {
+        setTenantId(profile.tenant_id);
+        cargarComunicados(profile.tenant_id);
+      }
+    }
+    init();
   }, []);
 
-  async function cargarComunicados() {
+  async function cargarComunicados(tId: string) {
     setLoading(true);
-    const { data } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('comunicados').select('*').eq('tenant_id', tId).order('created_at', { ascending: false });
     if (data) setComunicados(data);
     setLoading(false);
   }
 
   async function crearComunicado(e: React.FormEvent) {
     e.preventDefault();
+    if (!tenantId) return;
     setGuardando(true);
 
     await supabase.from('comunicados').insert({
-      tenant_id: '86aacb9e-5bf0-4ff1-926d-2a941529d035',
+      tenant_id: tenantId,
       title, content, type
     });
 
     setTitle(''); setContent(''); setType('info');
     setGuardando(false);
-    cargarComunicados();
+    cargarComunicados(tenantId);
   }
 
   async function eliminar(id: string) {
     if(confirm('¿Seguro que deseas eliminar este comunicado?')) {
       await supabase.from('comunicados').delete().eq('id', id);
-      cargarComunicados();
+      if (tenantId) cargarComunicados(tenantId);
     }
   }
 
@@ -50,8 +62,6 @@ export default function AdminComunicados() {
       </header>
 
       <div className="p-8 max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
-        
-        {/* Formulario */}
         <div className="w-full md:w-1/3">
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 sticky top-24">
             <h2 className="text-lg font-bold text-slate-800 mb-4">Nuevo Comunicado</h2>
@@ -82,7 +92,6 @@ export default function AdminComunicados() {
           </div>
         </div>
 
-        {/* Lista de Comunicados */}
         <div className="w-full md:w-2/3 space-y-4">
           {loading ? (
             <p className="text-center text-slate-400 py-10">Cargando...</p>
@@ -107,7 +116,6 @@ export default function AdminComunicados() {
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
