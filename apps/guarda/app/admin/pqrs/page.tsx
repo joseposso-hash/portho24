@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function AdminPQRS() {
+  // ⚠️ PEGA AQUÍ EL ID DE TU NUEVO CLIENTE (Edificio Los Pinos)
+  const TENANT_ID = '86aacb9e-5bf0-4ff1-926d-2a941529d035'; 
+
   const [pqrs, setPqrs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('all');
 
-  // Estados para el modal de respuesta
   const [pqrsSeleccionada, setPqrsSeleccionada] = useState<any>(null);
   const [respuestaTexto, setRespuestaTexto] = useState('');
 
@@ -20,6 +22,7 @@ export default function AdminPQRS() {
     const { data } = await supabase
       .from('pqrs')
       .select('*, units(code, towers(name))')
+      .eq('tenant_id', TENANT_ID) // <-- FILTRO POR CLIENTE
       .order('created_at', { ascending: false });
     
     if (data) setPqrs(data);
@@ -38,7 +41,7 @@ export default function AdminPQRS() {
       .from('pqrs')
       .update({ 
         response: respuestaTexto,
-        status: 'resolved' // Al responder, se marca como resuelto automáticamente
+        status: 'resolved'
       })
       .eq('id', pqrsSeleccionada.id);
       
@@ -56,13 +59,12 @@ export default function AdminPQRS() {
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
         <h1 className="text-xl font-bold text-slate-800">Gestión de PQRS</h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-500">Conjunto Los Robles</span>
+          <span className="text-sm text-slate-500">Edificio Los Pinos</span> {/* <-- Cambiar nombre */}
         </div>
       </header>
 
       <div className="p-8 max-w-6xl mx-auto">
         
-        {/* Filtros */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           <button onClick={() => setFiltro('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtro === 'all' ? 'bg-[#1E3A5F] text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
             Todos
@@ -78,14 +80,13 @@ export default function AdminPQRS() {
           </button>
         </div>
 
-        {/* Tabla */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
                 <th className="px-6 py-4">Tipo</th>
                 <th className="px-6 py-4">Asunto</th>
-                <th className="px-6 py-4">Remitente</th> {/* <-- NUEVA COLUMNA */}
+                <th className="px-6 py-4">Remitente</th>
                 <th className="px-6 py-4">Descripción</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Estado</th>
@@ -94,9 +95,9 @@ export default function AdminPQRS() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400">Cargando...</td></tr>
               ) : pqrsFiltrados.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400">No hay PQRS en esta categoría.</td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400">No hay PQRS en esta categoría.</td></tr>
               ) : (
                 pqrsFiltrados.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50">
@@ -105,7 +106,6 @@ export default function AdminPQRS() {
                     </td>
                     <td className="px-6 py-4 font-medium text-slate-800">{p.subject}</td>
                     
-                    {/* NUEVA CELDA CON TORRE Y APTO */}
                     <td className="px-6 py-4 text-xs font-semibold text-[#1E3A5F]">
                       {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
                     </td>
@@ -150,7 +150,6 @@ export default function AdminPQRS() {
         </div>
       </div>
 
-      {/* MODAL DE RESPUESTA */}
       {pqrsSeleccionada && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
 const COURIERS = ['Amazon', 'DHL', 'Servientrega', 'MercadoLibre', 'FedEx', 'Otro'];
-const TENANT_ID = '11111111-1111-1111-1111-111111111111';
+const TENANT_ID = '86aacb9e-5bf0-4ff1-926d-2a941529d035';
 
 export default function LobbyPage() {
   const router = useRouter();

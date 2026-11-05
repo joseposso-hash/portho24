@@ -27,7 +27,7 @@ export default function AdminComunicados() {
     setGuardando(true);
 
     await supabase.from('comunicados').insert({
-      tenant_id: '11111111-1111-1111-1111-111111111111',
+      tenant_id: '86aacb9e-5bf0-4ff1-926d-2a941529d035',
       title, content, type
     });
 
