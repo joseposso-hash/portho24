@@ -9,7 +9,7 @@ const MODULES = [
   { id: 'retiro',   label: 'Entregar Paquete', icon: '✅', color: 'bg-blue-600' },
   { id: 'visitas',  label: 'Crear Visita',     icon: '👤', color: 'bg-indigo-600' },
   { id: 'scan',     label: 'Escanear QR',      icon: '📷', color: 'bg-purple-600' },
-  { id: 'parking?', label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' }, // <-- Agregamos el ?
+  { id: 'parking',  label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' },
   { id: 'admin',    label: 'Central (Admin)',  icon: '🖥️', color: 'bg-slate-800' },
 ];
 
@@ -30,21 +30,14 @@ export default function GuardaHome() {
     });
   }, [router]);
 
-    async function cargarActividad() {
-    // 1. Obtener el tenant del usuario logueado
+  async function cargarActividad() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    const { data: profile } = await supabase
-      .from('users')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
+    const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
     if (!profile) return;
     const tId = profile.tenant_id;
 
-    // 2. Cargar SOLO la actividad de ese tenant
     const [packs, visits, cars] = await Promise.all([
       supabase.from('packages').select('id, courier, status, created_at').eq('tenant_id', tId).order('created_at', { ascending: false }).limit(3),
       supabase.from('visits').select('id, status, check_in_at, visitors(full_name)').eq('tenant_id', tId).order('check_in_at', { ascending: false }).limit(3),
@@ -52,7 +45,6 @@ export default function GuardaHome() {
     ]);
 
     const eventos: any[] = [];
-    
     packs.data?.forEach(p => eventos.push({ tipo: '📦 Paquete', texto: `${p.courier} (${p.status === 'received' ? 'Recibido' : 'Entregado'})`, fecha: p.created_at }));
     visits.data?.forEach((v: any) => eventos.push({ tipo: '👤 Visita', texto: `${v.visitors?.full_name || 'Visitante'}`, fecha: v.check_in_at }));
     cars.data?.forEach((c: any) => eventos.push({ tipo: '🚗 Vehículo', texto: `Placa ${c.vehicles?.plate || 'N/A'}`, fecha: c.check_in_at }));
@@ -80,40 +72,26 @@ export default function GuardaHome() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/residente" target="_blank" className="text-xs font-medium text-[#1E3A5F] hover:underline bg-white px-3 py-2 rounded-lg shadow-sm">
-            Ver App Residente ↗
-          </Link>
-          <button onClick={handleLogout} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">
-            Salir
-          </button>
+          <Link href="/residente" target="_blank" className="text-xs font-medium text-[#1E3A5F] hover:underline bg-white px-3 py-2 rounded-lg shadow-sm">Ver App Residente ↗</Link>
+          <button onClick={handleLogout} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">Salir</button>
         </div>
       </header>
 
-      {/* Botones de acción compactos */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         {MODULES.map((m) => (
-          <Link 
-            href={`/${m.id}`} 
-            key={m.id} 
-            className={`flex h-28 flex-col items-center justify-center gap-1 rounded-xl ${m.color} text-white shadow-sm transition hover:opacity-90 active:scale-95`}
-          >
+          <Link href={`/${m.id}`} key={m.id} className={`flex h-28 flex-col items-center justify-center gap-1 rounded-xl ${m.color} text-white shadow-sm transition hover:opacity-90 active:scale-95`}>
             <span className="text-3xl">{m.icon}</span>
             <span className="text-sm font-semibold text-center px-2 leading-tight">{m.label}</span>
           </Link>
         ))}
       </div>
 
-      {/* SECCIÓN DE ACTIVIDAD DEL DÍA */}
       <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
-        
         <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
           <div>
             <h2 className="text-base font-bold text-slate-800">🕒 Actividad Reciente</h2>
-            <p className="text-xs text-slate-500">Últimos movimientos en portería</p>
           </div>
-          <Link href="/historial" className="text-xs font-medium text-blue-600 hover:underline bg-blue-50 px-3 py-1.5 rounded-lg">
-            Ver historial completo →
-          </Link>
+          <Link href="/historial" className="text-xs font-medium text-blue-600 hover:underline bg-blue-50 px-3 py-1.5 rounded-lg">Ver historial completo →</Link>
         </div>
         
         <ul className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
@@ -123,9 +101,7 @@ export default function GuardaHome() {
             actividad.slice(0, 10).map((evento, index) => (
               <li key={index} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50 transition">
                 <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-lg">
-                    {evento.tipo.split(' ')[0]}
-                  </div>
+                  <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-lg">{evento.tipo.split(' ')[0]}</div>
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{evento.tipo.split(' ')[1]}</p>
                     <p className="text-xs text-slate-500">{evento.texto}</p>
