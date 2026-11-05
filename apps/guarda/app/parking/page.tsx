@@ -8,7 +8,7 @@ export default function ParkingPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [placa, setPlaca] = useState('');
-  const [torre, setTorre] = useState('');
+  const [torre, setTorre] = useState(''); // En casas, no suele haber torre, pero lo dejamos por compatibilidad
   const [apto, setApto] = useState('');
   const [conductor, setConductor] = useState('');
   const [docConductor, setDocConductor] = useState('');

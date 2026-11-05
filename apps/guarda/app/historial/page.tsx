@@ -8,7 +8,6 @@ export default function HistorialPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'vehiculos'>('paquetes');
   
-  // Estado inicial vacío para evitar error en el servidor de Next.js
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
 
@@ -16,13 +15,11 @@ export default function HistorialPage() {
   const [visitas, setVisitas] = useState<any[]>([]);
   const [vehiculos, setVehiculos] = useState<any[]>([]);
 
-  // 1. Asignar la fecha de hoy cuando el componente se monta en el navegador
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0];
     setFechaFiltro(hoy);
   }, []);
 
-  // 2. Cargar los datos solo cuando la fecha ya esté definida
   useEffect(() => {
     if (!fechaFiltro) return;
 
@@ -34,7 +31,7 @@ export default function HistorialPage() {
 
       const [packs, visits, cars] = await Promise.all([
         supabase.from('packages')
-          .select('*')
+          .select('*, units(code, towers(name))') // <-- TRAE LA UNIDAD
           .gte('created_at', inicioDia)
           .lte('created_at', finDia)
           .order('created_at', { ascending: false }),
@@ -74,7 +71,6 @@ export default function HistorialPage() {
     }
   }
 
-  // Filtros de búsqueda
   const paquetesFiltrados = paquetes.filter(p => p.courier?.toLowerCase().includes(busqueda.toLowerCase()) || p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase()));
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
@@ -92,51 +88,30 @@ export default function HistorialPage() {
       </header>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-        
-        {/* Pestañas */}
         <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
-          <button onClick={() => setTab('paquetes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'paquetes' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-            📦 Paquetes ({paquetes.length})
-          </button>
-          <button onClick={() => setTab('visitas')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'visitas' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-            👤 Visitas ({visitas.length})
-          </button>
-          <button onClick={() => setTab('vehiculos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'vehiculos' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-            🚗 Vehículos ({vehiculos.length})
-          </button>
+          <button onClick={() => setTab('paquetes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'paquetes' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>📦 Paquetes ({paquetes.length})</button>
+          <button onClick={() => setTab('visitas')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'visitas' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>👤 Visitas ({visitas.length})</button>
+          <button onClick={() => setTab('vehiculos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === 'vehiculos' ? 'bg-[#1E3A5F] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>🚗 Vehículos ({vehiculos.length})</button>
         </div>
         
-        {/* FILTRO DE FECHA Y BÚSQUEDA */}
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <div className="relative">
-            <input 
-              type="date" 
-              value={fechaFiltro}
-              onChange={(e) => setFechaFiltro(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
-            />
+            <input type="date" value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none" />
             <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FECHA DE CONSULTA</span>
           </div>
-
-          <input 
-            type="text" 
-            placeholder="Buscar..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full sm:w-64 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
-          />
+          <input type="text" placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full sm:w-64 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none" />
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
         
-        {/* TABLA PAQUETES */}
         {tab === 'paquetes' && (
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
                 <th className="px-4 py-3">Foto</th>
                 <th className="px-4 py-3">Courier / Guía</th>
+                <th className="px-4 py-3">Destino</th> {/* <-- NUEVA COLUMNA */}
                 <th className="px-4 py-3">PIN</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Hora</th>
@@ -144,17 +119,21 @@ export default function HistorialPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
-               paquetesFiltrados.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
+              {loading ? <tr><td colSpan={7} className="p-6 text-center">Cargando...</td></tr> : 
+               paquetesFiltrados.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
                paquetesFiltrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2"><img src={p.photo_url} className="h-8 w-8 object-cover rounded" /></td>
                   <td className="px-4 py-2 font-semibold text-slate-900">{p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span></td>
+                  
+                  {/* CELDA DE DESTINO */}
+                  <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">
+                    {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                  </td>
+
                   <td className="px-4 py-2 font-mono text-slate-400">••••••</td>
                   <td className="px-4 py-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {p.status === 'received' ? 'Pendiente' : 'Entregado'}
-                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{p.status === 'received' ? 'Pendiente' : 'Entregado'}</span>
                   </td>
                   <td className="px-4 py-2 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO')}</td>
                   <td className="px-4 py-2">
@@ -168,7 +147,6 @@ export default function HistorialPage() {
           </table>
         )}
 
-        {/* TABLA VISITAS */}
         {tab === 'visitas' && (
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
@@ -193,9 +171,7 @@ export default function HistorialPage() {
                   <td className="px-4 py-3 text-slate-700">{(v.visitors as any)?.doc_number}</td>
                   <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{(v.units as any)?.towers?.name} - {(v.units as any)?.code}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'checked_in' ? 'bg-blue-100 text-blue-800' : v.status === 'authorized' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                      {v.status === 'checked_in' ? 'Adentro' : v.status === 'authorized' ? 'Esperando' : 'Salió/Cancelada'}
-                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'checked_in' ? 'bg-blue-100 text-blue-800' : v.status === 'authorized' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{v.status === 'checked_in' ? 'Adentro' : v.status === 'authorized' ? 'Esperando' : 'Salió/Cancelada'}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">{v.check_in_at ? new Date(v.check_in_at).toLocaleTimeString('es-CO') : 'Aún no ingresa'}</td>
                 </tr>
@@ -204,14 +180,13 @@ export default function HistorialPage() {
           </table>
         )}
 
-        {/* TABLA VEHÍCULOS */}
         {tab === 'vehiculos' && (
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
                 <th className="px-4 py-3">Foto</th>
                 <th className="px-4 py-3">Placa</th>
-                <th className="px-4 py-3">Notas</th>
+                <th className="px-4 py-3">Notas (Destino)</th> {/* <-- CAMBIO */}
                 <th className="px-4 py-3">Cobro</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Hora</th>
@@ -229,9 +204,7 @@ export default function HistorialPage() {
                   <td className="px-4 py-3 text-xs font-medium text-slate-700">{c.notes || '-'}</td>
                   <td className="px-4 py-3 font-semibold text-emerald-600">${(c.amount_paid || 0).toLocaleString('es-CO')}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
-                      {c.status === 'active' ? 'Adentro' : 'Salió'}
-                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{c.status === 'active' ? 'Adentro' : 'Salió'}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">{new Date(c.check_in_at || c.created_at).toLocaleTimeString('es-CO')}</td>
                 </tr>
