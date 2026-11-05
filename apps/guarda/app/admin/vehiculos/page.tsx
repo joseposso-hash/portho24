@@ -6,7 +6,6 @@ export default function AdminVehiculos() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  // Filtro de fecha vacío por defecto (opcional)
   const [fechaFiltro, setFechaFiltro] = useState('');
 
   useEffect(() => {
@@ -16,14 +15,12 @@ export default function AdminVehiculos() {
   async function cargar() {
     setLoading(true);
     
-    // Consulta base: trae los últimos 100 sin filtro
     let query = supabase
       .from('parking_sessions')
-      .select('*, vehicles(plate), units(code, towers(name))')
+      .select('*, vehicles(plate)')
       .order('check_in_at', { ascending: false })
       .limit(100);
 
-    // Si el admin elige una fecha, aplicamos el filtro
     if (fechaFiltro) {
       const inicio = `${fechaFiltro}T00:00:00`;
       const fin = `${fechaFiltro}T23:59:59`;
@@ -45,21 +42,23 @@ export default function AdminVehiculos() {
     v.notes?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  const getDestino = (v: any) => {
-    if (v.units) return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
-    if (v.notes) {
-      const match = v.notes.match(/Destino:\s*(.+)/i);
-      if (match) return match[1];
-    }
-    return 'No especificado';
-  };
+  // Extraer datos limpios de las notas
+  const getDatosLimpios = (v: any) => {
+    const notes = v.notes || '';
+    
+    // Extraer Conductor
+    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+    const conductor = matchCond ? matchCond[1].trim() : '-';
 
-  const getConductor = (v: any) => {
-    if (v.notes) {
-      const match = v.notes.match(/Conductor:\s*([^-]+)/i);
-      if (match) return match[1].trim();
-    }
-    return '-';
+    // Extraer Destino
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    const destino = matchDest ? matchDest[1].trim() : 'No especificado';
+
+    // Extraer Foto del Conductor (URL)
+    const matchFoto = notes.match(/FotoCond:\s*(https?:\/\/\S+)/i);
+    const fotoConductor = matchFoto ? matchFoto[1].trim() : null;
+
+    return { conductor, destino, fotoConductor };
   };
 
   return (
@@ -92,7 +91,7 @@ export default function AdminVehiculos() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
-                <th className="px-4 py-3">Foto</th>
+                <th className="px-4 py-3">Foto Vehículo</th>
                 <th className="px-4 py-3">Placa</th>
                 <th className="px-4 py-3">Conductor</th>
                 <th className="px-4 py-3">Destino</th>
@@ -105,32 +104,41 @@ export default function AdminVehiculos() {
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={8} className="p-8 text-center">Cargando...</td></tr> : 
                filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados.</td></tr> :
-               filtrados.map(v => (
-                <tr key={v.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    {v.photo_url ? (
-                      <img src={v.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
-                    ) : (
-                      <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
-                  <td className="px-4 py-3 text-xs font-medium text-slate-700">{getConductor(v)}</td>
-                  <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{getDestino(v)}</td>
-                  <td className="px-4 py-3 font-semibold text-emerald-600">${(v.amount_paid || 0).toLocaleString('es-CO')}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
-                      {v.status === 'active' ? 'Adentro' : 'Salió'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    {v.check_in_at ? new Date(v.check_in_at).toLocaleTimeString('es-CO') : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    {v.check_out_at ? new Date(v.check_out_at).toLocaleTimeString('es-CO') : '-'}
-                  </td>
-                </tr>
-              ))}
+               filtrados.map(v => {
+                 const datos = getDatosLimpios(v);
+                 return (
+                  <tr key={v.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      {v.photo_url ? (
+                        <img src={v.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
+                      ) : (
+                        <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
+                    <td className="px-4 py-3 text-xs font-medium text-slate-700 flex items-center gap-2">
+                      {/* Si hay foto del conductor, mostramos un mini avatar */}
+                      {datos.fotoConductor && (
+                        <img src={datos.fotoConductor} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
+                      )}
+                      {datos.conductor}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{datos.destino}</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-600">${(v.amount_paid || 0).toLocaleString('es-CO')}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {v.status === 'active' ? 'Adentro' : 'Salió'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {v.check_in_at ? new Date(v.check_in_at).toLocaleTimeString('es-CO') : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {v.check_out_at ? new Date(v.check_out_at).toLocaleTimeString('es-CO') : '-'}
+                    </td>
+                  </tr>
+                 );
+               })}
             </tbody>
           </table>
         </div>
