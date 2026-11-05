@@ -20,12 +20,13 @@ export default function AdminVehiculos() {
       const inicio = `${fechaFiltro}T00:00:00`;
       const fin = `${fechaFiltro}T23:59:59`;
 
-            const { data } = await supabase
+      // ⚠️ Usamos created_at para el filtro
+      const { data } = await supabase
         .from('parking_sessions')
         .select('*, vehicles(plate), units(code, towers(name))')
-        .gte('check_in_at', inicio) // <-- Cambiamos a check_in_at
-        .lte('check_in_at', fin)
-        .order('check_in_at', { ascending: false });
+        .gte('created_at', inicio)
+        .lte('created_at', fin)
+        .order('created_at', { ascending: false });
       
       if (data) setVehiculos(data);
       setLoading(false);
@@ -38,11 +39,8 @@ export default function AdminVehiculos() {
     v.notes?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  // Función para extraer el destino de las notas
   const getDestino = (v: any) => {
-    if (v.units) {
-      return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
-    }
+    if (v.units) return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
     if (v.notes) {
       const match = v.notes.match(/Destino:\s*(.+)/i);
       if (match) return match[1];

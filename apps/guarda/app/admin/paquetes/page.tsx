@@ -8,7 +8,6 @@ export default function AdminPaquetes() {
   const [busqueda, setBusqueda] = useState('');
   const [fechaFiltro, setFechaFiltro] = useState('');
 
-  // Inicializar fecha en el cliente para evitar error de prerender
   useEffect(() => {
     setFechaFiltro(new Date().toISOString().split('T')[0]);
   }, []);
@@ -69,33 +68,42 @@ export default function AdminPaquetes() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
-                <th className="px-6 py-4">Foto</th>
-                <th className="px-6 py-4">Courier / Guía</th>
-                <th className="px-6 py-4">Destino</th>
-                <th className="px-6 py-4">PIN</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Hora</th>
+                <th className="px-4 py-4">Foto</th>
+                <th className="px-4 py-4">Courier / Guía</th>
+                <th className="px-4 py-4">Destino</th>
+                <th className="px-4 py-4">PIN</th>
+                <th className="px-4 py-4">Recibido</th> {/* <-- NUEVA */}
+                <th className="px-4 py-4">Entregado</th> {/* <-- NUEVA */}
+                <th className="px-4 py-4">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
+              {loading ? <tr><td colSpan={7} className="p-8 text-center">Cargando...</td></tr> : 
+               filtrados.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
-                  <td className="px-6 py-3 font-semibold text-slate-900">
+                  <td className="px-4 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">
                     {p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span>
                   </td>
-                  <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">
+                  <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
                     {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
                   </td>
-                  <td className="px-6 py-3 font-mono text-slate-400">••••••</td>
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-3 font-mono text-slate-400">••••••</td>
+                  
+                  {/* HORAS */}
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </td>
+
+                  <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                       {p.status === 'received' ? 'Pendiente' : 'Entregado'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO')}</td>
                 </tr>
               ))}
             </tbody>
