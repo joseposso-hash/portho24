@@ -20,12 +20,12 @@ export default function AdminVehiculos() {
       const inicio = `${fechaFiltro}T00:00:00`;
       const fin = `${fechaFiltro}T23:59:59`;
 
-      const { data } = await supabase
+            const { data } = await supabase
         .from('parking_sessions')
-        .select('*, vehicles(plate), units(code, towers(name))') // <-- Trae la unidad
-        .gte('created_at', inicio)
-        .lte('created_at', fin)
-        .order('created_at', { ascending: false });
+        .select('*, vehicles(plate), units(code, towers(name))')
+        .gte('check_in_at', inicio) // <-- Cambiamos a check_in_at
+        .lte('check_in_at', fin)
+        .order('check_in_at', { ascending: false });
       
       if (data) setVehiculos(data);
       setLoading(false);

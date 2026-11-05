@@ -30,9 +30,23 @@ export default function HistorialPage() {
       const finDia = `${fechaFiltro}T23:59:59`;
 
       const [packs, visits, cars] = await Promise.all([
-        supabase.from('packages').select('*, units(code, towers(name))').gte('created_at', inicioDia).lte('created_at', finDia).order('created_at', { ascending: false }),
-        supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').gte('created_at', inicioDia).lte('created_at', finDia).order('created_at', { ascending: false }),
-        supabase.from('parking_sessions').select('*, vehicles(plate)').gte('created_at', inicioDia).lte('created_at', finDia).order('created_at', { ascending: false })
+        supabase.from('packages')
+          .select('*, units(code, towers(name))')
+          .gte('created_at', inicioDia)
+          .lte('created_at', finDia)
+          .order('created_at', { ascending: false }),
+          
+        supabase.from('visits')
+          .select('*, visitors(full_name, doc_number), units(code, towers(name))')
+          .gte('created_at', inicioDia)
+          .lte('created_at', finDia)
+          .order('created_at', { ascending: false }),
+          
+        supabase.from('parking_sessions')
+          .select('*, vehicles(plate)')
+          .gte('created_at', inicioDia)
+          .lte('created_at', finDia)
+          .order('created_at', { ascending: false })
       ]);
 
       if (packs.data) setPaquetes(packs.data);
@@ -97,24 +111,35 @@ export default function HistorialPage() {
                 <th className="px-4 py-3">Courier / Guía</th>
                 <th className="px-4 py-3">Destino</th>
                 <th className="px-4 py-3">PIN</th>
+                <th className="px-4 py-3">Recibido</th>
+                <th className="px-4 py-3">Entregado</th>
                 <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Hora</th>
                 <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={7} className="p-6 text-center">Cargando...</td></tr> : 
-               paquetesFiltrados.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
+              {loading ? <tr><td colSpan={8} className="p-6 text-center">Cargando...</td></tr> : 
+               paquetesFiltrados.length === 0 ? <tr><td colSpan={8} className="p-6 text-center text-slate-400">No hay paquetes registrados en esta fecha.</td></tr> :
                paquetesFiltrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2"><img src={p.photo_url} className="h-8 w-8 object-cover rounded" /></td>
                   <td className="px-4 py-2 font-semibold text-slate-900">{p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span></td>
                   <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
                   <td className="px-4 py-2 font-mono text-slate-400">••••••</td>
+                  
+                  {/* HORA DE RECIBIDO */}
+                  <td className="px-4 py-2 text-xs text-slate-600">
+                    {new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  
+                  {/* HORA DE ENTREGADO */}
+                  <td className="px-4 py-2 text-xs text-slate-600">
+                    {p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </td>
+
                   <td className="px-4 py-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{p.status === 'received' ? 'Pendiente' : 'Entregado'}</span>
                   </td>
-                  <td className="px-4 py-2 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO')}</td>
                   <td className="px-4 py-2">
                     {p.status === 'received' ? (
                       <button onClick={() => regenerarPin(p.id)} className="text-xs bg-amber-100 text-amber-800 px-3 py-1.5 rounded hover:bg-amber-200 font-medium">Regenerar PIN</button>
@@ -168,8 +193,8 @@ export default function HistorialPage() {
                 <th className="px-4 py-3">Notas (Destino)</th>
                 <th className="px-4 py-3">Cobro</th>
                 <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Hora Ingreso</th> {/* <-- COLUMNA INGRESO */}
-                <th className="px-4 py-3">Hora Salida</th>  {/* <-- COLUMNA SALIDA */}
+                <th className="px-4 py-3">Hora Ingreso</th>
+                <th className="px-4 py-3">Hora Salida</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -186,17 +211,12 @@ export default function HistorialPage() {
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{c.status === 'active' ? 'Adentro' : 'Salió'}</span>
                   </td>
-                  
-                  {/* HORA DE ENTRADA */}
                   <td className="px-4 py-3 text-xs text-slate-600">
                     {c.check_in_at ? new Date(c.check_in_at).toLocaleTimeString('es-CO') : '-'}
                   </td>
-
-                  {/* HORA DE SALIDA */}
                   <td className="px-4 py-3 text-xs text-slate-600">
                     {c.check_out_at ? new Date(c.check_out_at).toLocaleTimeString('es-CO') : '-'}
                   </td>
-
                 </tr>
               ))}
             </tbody>
