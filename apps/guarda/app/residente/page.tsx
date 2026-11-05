@@ -7,14 +7,12 @@ import { supabase } from '../lib/supabase';
 export default function ResidentePage() {
   const router = useRouter();
   
-  const [unitCode, setUnitCode] = useState('101'); 
-
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
-  // AHORA TENEMOS 5 PESTAÑAS
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'reservas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
+  const [nombreResidente, setNombreResidente] = useState('');
   
   // Estados para Visitas
   const [nombreVisita, setNombreVisita] = useState('');
@@ -40,49 +38,59 @@ export default function ResidentePage() {
   const [comunicados, setComunicados] = useState<any[]>([]);
 
   useEffect(() => {
-    setLoading(true);
     async function cargarDatos() {
-      const { data: unitDataArray } = await supabase
-        .from('units')
-        .select('*, towers(*)')
-        .eq('code', unitCode)
-        .limit(1);
+      setLoading(true);
+      
+      // 1. Obtener el usuario logueado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
 
-      const unitData = unitDataArray && unitDataArray.length > 0 ? unitDataArray[0] : null;
+      // 2. Buscar su perfil y su unidad
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*, units(*, towers(*))')
+        .eq('id', user.id)
+        .single();
 
-      if (unitData) {
-        setMiUnidad(unitData);
-        
+      if (profile && profile.units) {
+        setMiUnidad(profile.units);
+        setNombreResidente(profile.full_name);
+
+        // 3. Cargar paquetes de SU unidad
         const { data: packs } = await supabase
           .from('packages')
           .select('*')
-          .eq('recipient_unit_id', unitData.id)
+          .eq('recipient_unit_id', profile.units.id)
           .eq('status', 'received')
           .order('created_at', { ascending: false });
 
+        // 4. Cargar visitas de SU unidad
         const { data: vis } = await supabase
           .from('visits')
           .select('*, visitors(full_name, doc_number)')
-          .eq('unit_id', unitData.id)
+          .eq('unit_id', profile.units.id)
           .eq('status', 'authorized')
           .order('created_at', { ascending: false });
 
-        const { data: areasData } = await supabase
-          .from('areas_comunes')
-          .select('*');
-
+        // 5. Cargar áreas y reservas
+        const { data: areasData } = await supabase.from('areas_comunes').select('*');
         const { data: reservasData } = await supabase
           .from('reservas')
           .select('*, areas_comunes(name, icon)')
-          .eq('unit_id', unitData.id)
+          .eq('unit_id', profile.units.id)
           .order('date', { ascending: true });
 
+        // 6. Cargar PQRS
         const { data: pqrsData } = await supabase
           .from('pqrs')
           .select('*')
-          .eq('unit_id', unitData.id)
+          .eq('unit_id', profile.units.id)
           .order('created_at', { ascending: false });
 
+        // 7. Cargar comunicados
         const { data: commData } = await supabase
           .from('comunicados')
           .select('*')
@@ -94,13 +102,12 @@ export default function ResidentePage() {
         if (reservasData) setMisReservas(reservasData);
         if (pqrsData) setMisPqrs(pqrsData);
         if (commData) setComunicados(commData);
-      } else {
-        setMiUnidad(null);
       }
+      
       setLoading(false);
     }
     cargarDatos();
-  }, [unitCode]);
+  }, [router]);
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
@@ -123,7 +130,7 @@ export default function ResidentePage() {
       .insert({
         tenant_id: miUnidad.towers.tenant_id,
         visitor_id: visitor.id,
-        host_user_id: '31f6292b-6b35-41e4-bea3-11d0e3356fef',
+        host_user_id: (await supabase.auth.getUser()).data.user?.id,
         unit_id: miUnidad.id,
         status: 'authorized',
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
@@ -181,15 +188,11 @@ export default function ResidentePage() {
     if (error) {
       alert('Error al enviar: ' + error.message);
     } else {
-      alert('✅ PQRS enviada correctamente. La administración la revisará pronto.');
+      alert('✅ PQRS enviada correctamente.');
       setAsuntoPQRS('');
       setDescPQRS('');
       
-      const { data: pqrsData } = await supabase
-        .from('pqrs')
-        .select('*')
-        .eq('unit_id', miUnidad.id)
-        .order('created_at', { ascending: false });
+      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false });
       if (pqrsData) setMisPqrs(pqrsData);
     }
     setEnviandoPQRS(false);
@@ -201,16 +204,8 @@ export default function ResidentePage() {
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
         <h1 className="text-2xl font-bold text-red-500 mb-4">Unidad no encontrada</h1>
-        <p className="text-slate-600 mb-6">No se encontró el apartamento {unitCode} en la base de datos.</p>
-        <select 
-          className="w-full bg-slate-100 p-3 rounded-lg text-slate-800 font-medium outline-none border border-slate-300"
-          value={unitCode}
-          onChange={(e) => setUnitCode(e.target.value)}
-        >
-          <option value="101">Intentar con Ana (101)</option>
-          <option value="209">Intentar con Carlos (209)</option>
-          <option value="502">Intentar con Luis (502)</option>
-        </select>
+        <p className="text-slate-600 mb-6">No tienes un apartamento asignado. Contacta a la administración.</p>
+        <button onClick={() => router.push('/login')} className="bg-[#1E3A5F] text-white px-6 py-2 rounded-lg">Volver al Login</button>
       </div>
     </div>
   );
@@ -224,39 +219,20 @@ export default function ResidentePage() {
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 bg-white/20 rounded-full flex items-center justify-center text-xl">🏠</div>
               <div>
-                <p className="text-sm text-blue-200">Bienvenido,</p>
-                <h1 className="text-xl font-bold">{miUnidad.towers.name} - {miUnidad.code}</h1>
+                <p className="text-sm text-blue-200">Hola,</p>
+                <h1 className="text-lg font-bold">{nombreResidente}</h1>
+                <p className="text-xs text-blue-200">{miUnidad.towers.name} - Casa {miUnidad.code}</p>
               </div>
             </div>
-            
-            <select 
-              className="bg-white/20 text-xs p-1.5 rounded-lg text-white font-medium outline-none cursor-pointer border border-white/10"
-              value={unitCode}
-              onChange={(e) => setUnitCode(e.target.value)}
-            >
-              <option value="101" className="text-black">Ana (101)</option>
-              <option value="209" className="text-black">Carlos (209)</option>
-              <option value="502" className="text-black">Luis (502)</option>
-            </select>
+            <button onClick={() => router.push('/login')} className="bg-white/10 px-3 py-1.5 rounded-lg text-xs hover:bg-white/20">Salir</button>
           </div>
           
-          {/* 5 PESTAÑAS */}
-          <div className="flex gap-1 bg-white/10 p-1 rounded-xl">
-            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
-              📦 Paquetes
-            </button>
-            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
-              👤 Visitas
-            </button>
-            <button onClick={() => setTab('reservas')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'reservas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
-              🏊 Reservas
-            </button>
-            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
-              📝 PQRS
-            </button>
-            <button onClick={() => setTab('muro')} className={`flex-1 py-2 text-[10px] sm:text-[11px] font-medium rounded-lg transition ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>
-              📢 Muro
-            </button>
+          <div className="flex gap-1 bg-white/10 p-1 rounded-xl overflow-x-auto">
+            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📦 Paquetes</button>
+            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>👤 Visitas</button>
+            <button onClick={() => setTab('reservas')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'reservas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>🏊 Reservas</button>
+            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📝 PQRS</button>
+            <button onClick={() => setTab('muro')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📢 Muro</button>
           </div>
         </header>
 
@@ -299,12 +275,8 @@ export default function ResidentePage() {
                         <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { setQrGenerado(v.id); setNombreVisita((v.visitors as any)?.full_name || ''); setDocVisita((v.visitors as any)?.doc_number || ''); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">
-                          Ver QR
-                        </button>
-                        <button onClick={async () => { if(confirm('¿Seguro que deseas cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">
-                          Cancelar
-                        </button>
+                        <button onClick={() => { setQrGenerado(v.id); setNombreVisita((v.visitors as any)?.full_name || ''); setDocVisita((v.visitors as any)?.doc_number || ''); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
+                        <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
                       </div>
                     </div>
                   ))}
@@ -339,9 +311,7 @@ export default function ResidentePage() {
                     <p><strong>Invitado:</strong> {nombreVisita}</p>
                     <p><strong>Documento:</strong> {docVisita}</p>
                   </div>
-                  <button onClick={() => { setQrGenerado(null); setNombreVisita(''); setDocVisita(''); }} className="mt-4 text-sm text-blue-600 font-medium hover:underline">
-                    Generar otro QR
-                  </button>
+                  <button onClick={() => { setQrGenerado(null); setNombreVisita(''); setDocVisita(''); }} className="mt-4 text-sm text-blue-600 font-medium hover:underline">Generar otro QR</button>
                 </div>
               )}
             </div>
@@ -356,7 +326,7 @@ export default function ResidentePage() {
                   <span className="text-sm font-medium text-slate-700">Área Común</span>
                   <select value={reservaForm.areaId} onChange={(e) => setReservaForm({...reservaForm, areaId: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900">
                     <option value="">Seleccionar área...</option>
-                    {areas.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name} (Cap: {a.capacity})</option>)}
+                    {areas.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
                   </select>
                 </label>
                 
@@ -376,11 +346,6 @@ export default function ResidentePage() {
                   </label>
                 </div>
 
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Notas (opcional)</span>
-                  <input type="text" value={reservaForm.notes} onChange={(e) => setReservaForm({...reservaForm, notes: e.target.value})} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Ej: Cumpleaños" />
-                </label>
-
                 <button type="submit" disabled={enviandoReserva} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">
                   {enviandoReserva ? 'Solicitando...' : 'Solicitar Reserva'}
                 </button>
@@ -398,18 +363,13 @@ export default function ResidentePage() {
                           <p className="font-bold text-slate-800 text-sm">{(r.areas_comunes as any)?.icon} {(r.areas_comunes as any)?.name}</p>
                           <p className="text-xs text-slate-500">{r.date} · {r.start_time} - {r.end_time}</p>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          r.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
-                          r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 
-                          'bg-red-100 text-red-800'
-                        }`}>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.status === 'pending' ? 'bg-amber-100 text-amber-800' : r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                           {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
                         </span>
                       </div>
-                      {r.notes && <p className="text-xs text-slate-500 mt-1">Mi nota: {r.notes}</p>}
                       {r.admin_notes && (
                         <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
-                          <strong>Motivo del rechazo:</strong> {r.admin_notes}
+                          <strong>Motivo:</strong> {r.admin_notes}
                         </div>
                       )}
                     </div>
@@ -422,8 +382,6 @@ export default function ResidentePage() {
           {tab === 'pqrs' && (
             <div className="space-y-6">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Enviar PQRS</h2>
-              <p className="text-sm text-slate-500 mb-4">Peticiones, Quejas, Reclamos, Sugerencias o Felicitaciones.</p>
-
               <form onSubmit={enviarPQRS} className="space-y-4">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Tipo de solicitud</span>
@@ -435,52 +393,40 @@ export default function ResidentePage() {
                     <option value="Felicitacion">Felicitación</option>
                   </select>
                 </label>
-
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Asunto</span>
                   <input type="text" value={asuntoPQRS} onChange={(e) => setAsuntoPQRS(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Ej: Ruido en el piso 3" />
                 </label>
-
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Descripción</span>
                   <textarea value={descPQRS} onChange={(e) => setDescPQRS(e.target.value)} required rows={4} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" placeholder="Detalla tu solicitud..." />
                 </label>
-
                 <button type="submit" disabled={enviandoPQRS} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">
-                  {enviandoPQRS ? 'Enviando...' : 'Enviar PQRS a la Administración'}
+                  {enviandoPQRS ? 'Enviando...' : 'Enviar PQRS'}
                 </button>
               </form>
-
+              
               <div className="mt-8">
                 <h3 className="text-sm font-bold text-slate-700 mb-3">Tus solicitudes anteriores:</h3>
-                {misPqrs.length === 0 ? (
-                  <p className="text-sm text-slate-400">No has enviado ninguna solicitud.</p>
-                ) : (
-                  misPqrs.map(p => (
-                    <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">{p.subject}</p>
-                          <p className="text-xs text-slate-500">{p.type} · {new Date(p.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          p.status === 'pending' ? 'bg-amber-100 text-amber-800' : 
-                          p.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
-                          'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          {p.status === 'pending' ? 'Pendiente' : p.status === 'in_progress' ? 'En Proceso' : 'Resuelto'}
-                        </span>
+                {misPqrs.length === 0 ? <p className="text-sm text-slate-400">No has enviado ninguna solicitud.</p> : 
+                 misPqrs.map(p => (
+                  <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{p.subject}</p>
+                        <p className="text-xs text-slate-500">{p.type} · {new Date(p.created_at).toLocaleDateString()}</p>
                       </div>
-                      
-                      {p.response && (
-                        <div className="mt-3 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
-                          <p className="text-xs font-bold text-emerald-800 mb-1">Respuesta de la Administración:</p>
-                          <p className="text-sm text-emerald-700">{p.response}</p>
-                        </div>
-                      )}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'pending' ? 'bg-amber-100 text-amber-800' : p.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>{p.status === 'pending' ? 'Pendiente' : p.status === 'in_progress' ? 'En Proceso' : 'Resuelto'}</span>
                     </div>
-                  ))
-                )}
+                    {p.response && (
+                      <div className="mt-3 bg-emerald-50 border border-emerald-100 p-3 rounded-lg">
+                        <p className="text-xs font-bold text-emerald-800 mb-1">Respuesta de la Administración:</p>
+                        <p className="text-sm text-emerald-700">{p.response}</p>
+                      </div>
+                    )}
+                  </div>
+                ))
+                }
               </div>
             </div>
           )}
@@ -497,13 +443,7 @@ export default function ResidentePage() {
                 comunicados.map(c => (
                   <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                        c.type === 'alerta' ? 'bg-red-100 text-red-700' :
-                        c.type === 'evento' ? 'bg-purple-100 text-purple-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>
-                        {c.type}
-                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${c.type === 'alerta' ? 'bg-red-100 text-red-700' : c.type === 'evento' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{c.type}</span>
                       <span className="text-xs text-slate-400">{new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
                     <h3 className="text-md font-bold text-slate-800">{c.title}</h3>
