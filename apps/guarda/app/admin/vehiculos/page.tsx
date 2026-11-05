@@ -6,7 +6,7 @@ export default function AdminVehiculos() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  // Por defecto, el filtro de fecha estará vacío para mostrar todo
+  // Filtro de fecha vacío por defecto (opcional)
   const [fechaFiltro, setFechaFiltro] = useState('');
 
   useEffect(() => {
@@ -16,20 +16,27 @@ export default function AdminVehiculos() {
   async function cargar() {
     setLoading(true);
     
+    // Consulta base: trae los últimos 100 sin filtro
     let query = supabase
       .from('parking_sessions')
       .select('*, vehicles(plate), units(code, towers(name))')
-      .order('created_at', { ascending: false });
+      .order('check_in_at', { ascending: false })
+      .limit(100);
 
-    // Si el admin selecciona una fecha, filtramos. Si no, trae todos.
+    // Si el admin elige una fecha, aplicamos el filtro
     if (fechaFiltro) {
       const inicio = `${fechaFiltro}T00:00:00`;
       const fin = `${fechaFiltro}T23:59:59`;
-      query = query.gte('created_at', inicio).lte('created_at', fin);
+      query = query.gte('check_in_at', inicio).lte('check_in_at', fin);
     }
 
-    const { data } = await query;
-    if (data) setVehiculos(data);
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error("Error cargando vehículos:", error);
+    } else if (data) {
+      setVehiculos(data);
+    }
     setLoading(false);
   }
 
