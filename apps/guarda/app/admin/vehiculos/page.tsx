@@ -22,7 +22,7 @@ export default function AdminVehiculos() {
 
       const { data } = await supabase
         .from('parking_sessions')
-        .select('*, vehicles(plate), units(code, towers(name))') // <-- Aseguramos traer la unidad si existe
+        .select('*, vehicles(plate), units(code, towers(name))') // <-- Trae la unidad
         .gte('created_at', inicio)
         .lte('created_at', fin)
         .order('created_at', { ascending: false });
@@ -40,15 +40,12 @@ export default function AdminVehiculos() {
 
   // Función para extraer el destino de las notas
   const getDestino = (v: any) => {
+    if (v.units) {
+      return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
+    }
     if (v.notes) {
       const match = v.notes.match(/Destino:\s*(.+)/i);
       if (match) return match[1];
-      // Si es una visita, las notas dicen "Visita: [Nombre] - Destino: [Torre/Casa]"
-      const matchVisita = v.notes.match(/Destino:\s*(.+)/i);
-      if (matchVisita) return matchVisita[1];
-    }
-    if (v.units) {
-      return `${(v.units as any)?.towers?.name} - ${(v.units as any)?.code}`;
     }
     return 'No especificado';
   };
@@ -91,38 +88,42 @@ export default function AdminVehiculos() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
-                <th className="px-6 py-4">Foto</th>
-                <th className="px-6 py-4">Placa</th>
-                <th className="px-6 py-4">Conductor</th>
-                <th className="px-6 py-4">Destino (Casa/Apto)</th> {/* <-- NUEVA COLUMNA */}
-                <th className="px-6 py-4">Cobro</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Hora</th>
+                <th className="px-4 py-3">Foto</th>
+                <th className="px-4 py-3">Placa</th>
+                <th className="px-4 py-3">Conductor</th>
+                <th className="px-4 py-3">Destino</th>
+                <th className="px-4 py-3">Cobro</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Hora Ingreso</th>
+                <th className="px-4 py-3">Hora Salida</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={7} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
+              {loading ? <tr><td colSpan={8} className="p-8 text-center">Cargando...</td></tr> : 
+               filtrados.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
                filtrados.map(v => (
                 <tr key={v.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-3">
                     {v.photo_url ? (
                       <img src={v.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
                     ) : (
                       <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
                     )}
                   </td>
-                  <td className="px-6 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
-                  <td className="px-6 py-3 text-xs font-medium text-slate-700">{getConductor(v)}</td>
-                  <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">{getDestino(v)}</td> {/* <-- CELDA DESTINO */}
-                  <td className="px-6 py-3 font-semibold text-emerald-600">${(v.amount_paid || 0).toLocaleString('es-CO')}</td>
-                  <td className="px-6 py-3">
+                  <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
+                  <td className="px-4 py-3 text-xs font-medium text-slate-700">{getConductor(v)}</td>
+                  <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{getDestino(v)}</td>
+                  <td className="px-4 py-3 font-semibold text-emerald-600">${(v.amount_paid || 0).toLocaleString('es-CO')}</td>
+                  <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${v.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
                       {v.status === 'active' ? 'Adentro' : 'Salió'}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs text-slate-600">
-                    {new Date(v.check_in_at || v.created_at).toLocaleTimeString('es-CO')}
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {v.check_in_at ? new Date(v.check_in_at).toLocaleTimeString('es-CO') : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {v.check_out_at ? new Date(v.check_out_at).toLocaleTimeString('es-CO') : '-'}
                   </td>
                 </tr>
               ))}
