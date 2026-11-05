@@ -75,6 +75,25 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()) || c.notes?.toLowerCase().includes(busqueda.toLowerCase()));
 
+  // Función para limpiar las notas de vehículos
+  const getDatosVehiculo = (v: any) => {
+    const notes = v.notes || '';
+    
+    // Si es una visita (notas con "Visita: Nombre - Destino: ...")
+    if (notes.includes('Visita:')) {
+      return { conductor: 'Visita', destino: notes.replace('Visita:', '').replace('Destino:', '').trim() };
+    }
+
+    // Si es manual (notas con "Conductor: ... - Destino: ...")
+    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+    const conductor = matchCond ? matchCond[1].trim() : '-';
+
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    const destino = matchDest ? matchDest[1].trim() : 'No especificado';
+
+    return { conductor, destino };
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -127,12 +146,9 @@ export default function HistorialPage() {
                   <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
                   <td className="px-4 py-2 font-mono text-slate-400">••••••</td>
                   
-                  {/* HORA DE RECIBIDO */}
                   <td className="px-4 py-2 text-xs text-slate-600">
                     {new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  
-                  {/* HORA DE ENTREGADO */}
                   <td className="px-4 py-2 text-xs text-slate-600">
                     {p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </td>
@@ -190,7 +206,8 @@ export default function HistorialPage() {
               <tr>
                 <th className="px-4 py-3">Foto</th>
                 <th className="px-4 py-3">Placa</th>
-                <th className="px-4 py-3">Notas (Destino)</th>
+                <th className="px-4 py-3">Conductor</th> {/* <-- Cambiamos el nombre */}
+                <th className="px-4 py-3">Destino</th>
                 <th className="px-4 py-3">Cobro</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Hora Ingreso</th>
@@ -198,27 +215,41 @@ export default function HistorialPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={7} className="p-6 text-center">Cargando...</td></tr> : 
-               vehiculosFiltrados.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
-               vehiculosFiltrados.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    {c.photo_url ? <img src={c.photo_url} className="h-10 w-10 object-cover rounded shadow-sm" /> : <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200"></div>}
-                  </td>
-                  <td className="px-4 py-3 font-bold text-slate-900">{(c.vehicles as any)?.plate}</td>
-                  <td className="px-4 py-3 text-xs font-medium text-slate-700">{c.notes || '-'}</td>
-                  <td className="px-4 py-3 font-semibold text-emerald-600">${(c.amount_paid || 0).toLocaleString('es-CO')}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{c.status === 'active' ? 'Adentro' : 'Salió'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    {c.check_in_at ? new Date(c.check_in_at).toLocaleTimeString('es-CO') : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    {c.check_out_at ? new Date(c.check_out_at).toLocaleTimeString('es-CO') : '-'}
-                  </td>
-                </tr>
-              ))}
+              {loading ? <tr><td colSpan={8} className="p-6 text-center">Cargando...</td></tr> : 
+               vehiculosFiltrados.length === 0 ? <tr><td colSpan={8} className="p-6 text-center text-slate-400">No hay vehículos registrados en esta fecha.</td></tr> :
+               vehiculosFiltrados.map(c => {
+                 const datos = getDatosVehiculo(c);
+                 return (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      {c.photo_url ? <img src={c.photo_url} className="h-10 w-10 object-cover rounded shadow-sm" /> : <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200"></div>}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-slate-900">{(c.vehicles as any)?.plate}</td>
+                    
+                    {/* CELDA DEL CONDUCTOR LIMPIA */}
+                    <td className="px-4 py-3 text-xs font-medium text-slate-700 flex items-center gap-2">
+                      {c.driver_photo_url && (
+                        <img src={c.driver_photo_url} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
+                      )}
+                      {datos.conductor}
+                    </td>
+
+                    {/* CELDA DEL DESTINO LIMPIA */}
+                    <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{datos.destino}</td>
+                    
+                    <td className="px-4 py-3 font-semibold text-emerald-600">${(c.amount_paid || 0).toLocaleString('es-CO')}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{c.status === 'active' ? 'Adentro' : 'Salió'}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {c.check_in_at ? new Date(c.check_in_at).toLocaleTimeString('es-CO') : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {c.check_out_at ? new Date(c.check_out_at).toLocaleTimeString('es-CO') : '-'}
+                    </td>
+                  </tr>
+                 );
+               })}
             </tbody>
           </table>
         )}
