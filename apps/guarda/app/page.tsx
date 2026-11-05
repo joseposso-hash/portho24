@@ -30,19 +30,31 @@ export default function GuardaHome() {
     });
   }, [router]);
 
-  async function cargarActividad() {
+    async function cargarActividad() {
+    // 1. Obtener el tenant del usuario logueado
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    const { data: profile } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) return;
+    const tId = profile.tenant_id;
+
+    // 2. Cargar SOLO la actividad de ese tenant
     const [packs, visits, cars] = await Promise.all([
-      supabase.from('packages').select('id, courier, status, created_at').order('created_at', { ascending: false }).limit(3),
-      supabase.from('visits').select('id, status, check_in_at, visitors(full_name)').order('check_in_at', { ascending: false }).limit(3),
-      supabase.from('parking_sessions').select('id, status, check_in_at, vehicles(plate)').order('check_in_at', { ascending: false }).limit(3)
+      supabase.from('packages').select('id, courier, status, created_at').eq('tenant_id', tId).order('created_at', { ascending: false }).limit(3),
+      supabase.from('visits').select('id, status, check_in_at, visitors(full_name)').eq('tenant_id', tId).order('check_in_at', { ascending: false }).limit(3),
+      supabase.from('parking_sessions').select('id, status, check_in_at, vehicles(plate)').eq('tenant_id', tId).order('check_in_at', { ascending: false }).limit(3)
     ]);
 
     const eventos: any[] = [];
     
     packs.data?.forEach(p => eventos.push({ tipo: '📦 Paquete', texto: `${p.courier} (${p.status === 'received' ? 'Recibido' : 'Entregado'})`, fecha: p.created_at }));
-    
     visits.data?.forEach((v: any) => eventos.push({ tipo: '👤 Visita', texto: `${v.visitors?.full_name || 'Visitante'}`, fecha: v.check_in_at }));
-    
     cars.data?.forEach((c: any) => eventos.push({ tipo: '🚗 Vehículo', texto: `Placa ${c.vehicles?.plate || 'N/A'}`, fecha: c.check_in_at }));
 
     eventos.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
