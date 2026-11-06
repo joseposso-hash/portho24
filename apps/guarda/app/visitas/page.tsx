@@ -82,7 +82,7 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
-      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS AL MÓDULO DE VEHÍCULOS
+      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS
       if (vieneEnVehiculo) {
         router.push(`/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${documento}&casa=${encodeURIComponent(unitSearch)}`);
       } else {
