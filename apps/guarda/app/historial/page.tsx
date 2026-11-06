@@ -55,29 +55,29 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // 🛠️ LÓGICA CORREGIDA PARA EXTRAER DATOS
+  // LÓGICA DEFINITIVA: Extrae lo que está entre "Conductor:" y el siguiente "-"
   const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    // Buscamos "Conductor:" (formato manual y formato visita)
-    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
-    if (matchCond) {
+    // Regex que busca "Conductor:" seguido de texto y se detiene en un guion o en "Destino"
+    const matchCond = notes.match(/Conductor:\s*(.*?)(?=\s*-|\s*Destino|$)/i);
+    if (matchCond && matchCond[1].trim().length > 0) {
       conductor = matchCond[1].trim();
-    } 
-    // Si por alguna razón no hay "Conductor:", buscamos "Visita:" (por retrocompatibilidad)
-    else if (notes.includes('Visita:')) {
-      const matchVisita = notes.match(/Visita:\s*([^-]+)/i);
-      if (matchVisita) conductor = matchVisita[1].trim();
     }
 
-    // Buscamos "Destino:"
-    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
-    if (matchDest) {
+    // Regex que busca "Destino:" seguido de texto
+    const matchDest = notes.match(/Destino:\s*(.*?)(?=\s*-|$)/i);
+    if (matchDest && matchDest[1].trim().length > 0) {
       destino = matchDest[1].trim();
     } else if (c.units) {
       destino = `${(c.units as any)?.towers?.name} - ${(c.units as any)?.code}`;
+    }
+
+    // Si aún queda como "-" y es una visita, intentar extraer el nombre del campo visit_id
+    if (conductor === '-' && c.visit_id) {
+      conductor = 'Visita';
     }
 
     return { conductor, destino };
