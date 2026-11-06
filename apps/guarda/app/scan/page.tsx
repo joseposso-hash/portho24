@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
@@ -11,9 +11,10 @@ export default function ScanPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   
+  // Estados para la foto y el vehículo
   const [visitaEncontrada, setVisitaEncontrada] = useState<any>(null);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
-  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null);
+  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null); 
   const [subiendo, setSubiendo] = useState(false);
   
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
@@ -42,9 +43,10 @@ export default function ScanPage() {
             html5QrCode.stop();
             setIsScanning(false);
 
-                        const { data, error } = await supabase
+            // 🔥 CONSULTA CORREGIDA: Traemos units(code, towers(name))
+            const { data, error } = await supabase
               .from('visits')
-              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))') // <-- AGREGAMOS units
+              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))')
               .eq('id', decodedText)
               .single();
 
@@ -89,6 +91,11 @@ export default function ScanPage() {
     }, 100);
   };
 
+  const handleTomarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setFotoVisitante(file);
+  };
+
   const confirmarIngreso = async () => {
     if (!visitaEncontrada || !fotoVisitante) {
       setErrorMsg('Debes tomar la foto del visitante.');
@@ -100,8 +107,6 @@ export default function ScanPage() {
     }
 
     setSubiendo(true);
-    setErrorMsg(null);
-
     try {
       const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
 
@@ -109,18 +114,15 @@ export default function ScanPage() {
       const fileExtVis = fotoVisitante.name.split('.').pop();
       const fileNameVis = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVis}`;
       const { error: errVis } = await supabase.storage.from('evidences').upload(fileNameVis, fotoVisitante, { contentType: fotoVisitante.type });
-      if (errVis) throw new Error("Error subiendo foto del visitante: " + errVis.message);
-      
+      if (errVis) throw errVis;
       const { data: { publicUrl: urlVis } } = supabase.storage.from('evidences').getPublicUrl(fileNameVis);
 
       // 2. Actualizar la visita
-      const { error: visitError } = await supabase.from('visits').update({ 
+      await supabase.from('visits').update({ 
         status: 'checked_in', 
         check_in_at: new Date().toISOString(),
         photo_url: urlVis
       }).eq('id', visitaEncontrada.id);
-
-      if (visitError) throw new Error("Error actualizando visita: " + visitError.message);
 
       // 3. Registrar el vehículo (si aplica)
       if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
@@ -129,28 +131,48 @@ export default function ScanPage() {
         const fileExtVeh = fotoVehiculo.name.split('.').pop();
         const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
         const { error: errVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
-        if (errVeh) throw new Error("Error subiendo foto del vehículo: " + errVeh.message);
-        
+        if (errVeh) throw errVeh;
         const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
 
-        // Buscar o crear vehículo
-        let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
+        // Buscar o crear vehículo (sin .single() para evitar el error 406)
+        let { data: vehiculosEncontrados } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('plate', placaVehiculo.toUpperCase())
+          .eq('tenant_id', tenantId)
+          .limit(1);
+
+        let veh = vehiculosEncontrados && vehiculosEncontrados.length > 0 ? vehiculosEncontrados[0] : null;
         
-                        if (veh) {
-          const { error: errSession } = await supabase.from('parking_sessions').insert({
+        if (!veh) {
+          const { data: newVeh, error: errNewVeh } = await supabase
+            .from('vehicles')
+            .insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo })
+            .select()
+            .single();
+          if (errNewVeh) throw errNewVeh;
+          veh = newVeh;
+        }
+
+        // Crear sesión de parqueadero
+        if (veh) {
+          const { error: sessionError } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visitaEncontrada.id, 
+            visit_id: visitaEncontrada.id,
             unit_id: (visitaEncontrada.units as any).id,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // 🔥 CORRECCIÓN: Usamos .code (la casa) en lugar de .name (el conjunto)
+            // 🔥 CORRECCIÓN: Guardamos el código de la casa (ej. 125)
             notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: Casa ${(visitaEncontrada.units as any).code}`,
             photo_url: urlVeh
           });
 
-          if (errSession) throw errSession;
+          if (sessionError) {
+            console.error("Error detallado de parking_sessions:", sessionError);
+            throw new Error("Error en parqueadero: " + sessionError.message);
+          }
         }
       }
 
@@ -224,7 +246,7 @@ export default function ScanPage() {
                     {fotoVisitante ? '✅ Foto visitante capturada' : 'Tomar foto del visitante'}
                   </span>
                 </span>
-                <input type="file" accept="image/*" capture="user" onChange={(e) => setFotoVisitante(e.target.files?.[0] || null)} className="hidden" />
+                <input type="file" accept="image/*" capture="user" onChange={handleTomarFoto} className="hidden" />
               </label>
             </div>
 
