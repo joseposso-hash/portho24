@@ -29,8 +29,8 @@ export default function HistorialPage() {
     let qVisits = supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     
     // Traemos la unidad vinculada a la sesión de parqueadero
-    let qCars = supabase.from('parking_sessions')
-      .select('*, vehicles(plate), units(code, towers(name))')
+        let qCars = supabase.from('parking_sessions')
+      .select('*, vehicles(plate)') // <-- QUITAMOS units(code, towers(name))
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -60,27 +60,21 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  const getDatosVehiculo = (c: any) => {
+    const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = 'Sin nombre';
     let destino = 'No especificado';
 
-    // Conductor
+    // 1. Conductor
     const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
     if (matchCond) conductor = matchCond[1].trim();
 
-    // Destino: Primero buscamos la unidad vinculada (por la visita o la sesión)
-    if (c.units) {
-      destino = `${(c.units as any)?.towers?.name} - ${(c.units as any)?.code}`;
-    } else {
-      // Si no hay unidad, buscamos en las notas
-      const matchDest = notes.match(/Destino:\s*([^-]+)/i);
-      if (matchDest) destino = matchDest[1].trim();
-    }
+    // 2. Destino (siempre desde las notas)
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    if (matchDest) destino = matchDest[1].trim();
 
     return { conductor, destino };
   };
-
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
