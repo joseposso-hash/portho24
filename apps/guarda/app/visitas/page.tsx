@@ -38,7 +38,7 @@ export default function VisitasPage() {
     init();
   }, []);
 
-  async function registrarVisita(e: React.FormEvent) {
+    async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
       setErrorMsg('Por favor, llena los datos y selecciona la casa.');
@@ -85,54 +85,13 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
-      // 4. Guardar el Vehículo (si aplica)
-      if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
-        const fileExtVeh = fotoVehiculo.name.split('.').pop();
-        const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
-        const { error: errVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
-        if (errVeh) throw errVeh;
-        const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
-
-        // 🔥 CORRECCIÓN: Usamos .limit(1) en lugar de .single() para evitar el error 406
-        let { data: vehiculosEncontrados } = await supabase
-          .from('vehicles')
-          .select('*')
-          .eq('plate', placaVehiculo.toUpperCase())
-          .eq('tenant_id', tenantId)
-          .limit(1);
-
-        let veh = vehiculosEncontrados && vehiculosEncontrados.length > 0 ? vehiculosEncontrados[0] : null;
-        
-        // Si no existe, lo creamos
-        if (!veh) {
-          const { data: newVeh, error: errNewVeh } = await supabase
-            .from('vehicles')
-            .insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo })
-            .select()
-            .single();
-          if (errNewVeh) throw errNewVeh;
-          veh = newVeh;
-        }
-
-        if (veh) {
-          // 🔥 AQUÍ GUARDAMOS EL NOMBRE EN EL FORMATO EXACTO QUE ESPERA EL HISTORIAL
-          const { error: errSession } = await supabase.from('parking_sessions').insert({
-            tenant_id: tenantId,
-            vehicle_id: veh.id,
-            visit_id: visita.id, 
-            unit_id: unitId,
-            status: 'active',
-            check_in_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
-            photo_url: urlVeh
-          });
-
-          if (errSession) throw errSession;
-        }
+      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS AL MÓDULO DE VEHÍCULOS
+      if (vieneEnVehiculo) {
+        router.push(`/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${documento}&casa=${encodeURIComponent(unitSearch)}`);
+      } else {
+        setSuccess(true);
       }
 
-      setSuccess(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al registrar la visita.');
     } finally {
