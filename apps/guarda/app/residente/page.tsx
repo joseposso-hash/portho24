@@ -46,11 +46,11 @@ export default function ResidentePage() {
     if (!user) { router.push('/login'); return; }
 
     // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
-    const { data: profile } = await supabase
-      .from('users')
-      .select('*, units(*, towers(*, tenants(*)))')
-      .eq('id', user.id)
-      .maybeSingle();
+    const { data: profile, error } = await supabase
+  .from('users')
+  .select('*, tenants(*)')
+  .eq('id', user.id)
+  .maybeSingle();
 
     if (profile && profile.units) {
       setMiUnidad(profile.units);
