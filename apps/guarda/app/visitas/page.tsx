@@ -93,16 +93,29 @@ export default function VisitasPage() {
         if (errVeh) throw errVeh;
         const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
 
-        let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
+        // 🔥 CORRECCIÓN: Usamos .limit(1) en lugar de .single() para evitar el error 406
+        let { data: vehiculosEncontrados } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('plate', placaVehiculo.toUpperCase())
+          .eq('tenant_id', tenantId)
+          .limit(1);
+
+        let veh = vehiculosEncontrados && vehiculosEncontrados.length > 0 ? vehiculosEncontrados[0] : null;
         
+        // Si no existe, lo creamos
         if (!veh) {
-          const { data: newVeh, error: errNewVeh } = await supabase.from('vehicles').insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo }).select().single();
+          const { data: newVeh, error: errNewVeh } = await supabase
+            .from('vehicles')
+            .insert({ tenant_id: tenantId, plate: placaVehiculo.toUpperCase(), type: tipoVehiculo })
+            .select()
+            .single();
           if (errNewVeh) throw errNewVeh;
           veh = newVeh;
         }
 
         if (veh) {
-          // 🔥 AQUÍ ESTÁ EL FORMATO EXACTO QUE FUNCIONA
+          // 🔥 AQUÍ GUARDAMOS EL NOMBRE EN EL FORMATO EXACTO QUE ESPERA EL HISTORIAL
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
@@ -111,7 +124,7 @@ export default function VisitasPage() {
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, 
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });
 
