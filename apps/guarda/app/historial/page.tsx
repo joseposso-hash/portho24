@@ -57,27 +57,29 @@ export default function HistorialPage() {
 
   // LÓGICA DEFINITIVA: Extrae lo que está entre "Conductor:" y el siguiente "-"
   const getDatosVehiculo = (c: any) => {
+      const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    // Regex que busca "Conductor:" seguido de texto y se detiene en un guion o en "Destino"
-    const matchCond = notes.match(/Conductor:\s*(.*?)(?=\s*-|\s*Destino|$)/i);
-    if (matchCond && matchCond[1].trim().length > 0) {
+    // 1. Extraer Conductor
+    // Busca "Conductor: [nombre]" y se detiene en un guion o en "Destino"
+    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+    if (matchCond) {
       conductor = matchCond[1].trim();
+    } 
+    // Si no encuentra "Conductor", busca "Visita no anunciada:" (por si queda algún registro viejo)
+    else if (notes.includes('Visita no anunciada:')) {
+      const matchVisita = notes.match(/Visita no anunciada:\s*([^-]+)/i);
+      if (matchVisita) conductor = matchVisita[1].trim();
     }
 
-    // Regex que busca "Destino:" seguido de texto
-    const matchDest = notes.match(/Destino:\s*(.*?)(?=\s*-|$)/i);
-    if (matchDest && matchDest[1].trim().length > 0) {
+    // 2. Extraer Destino
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    if (matchDest) {
       destino = matchDest[1].trim();
     } else if (c.units) {
       destino = `${(c.units as any)?.towers?.name} - ${(c.units as any)?.code}`;
-    }
-
-    // Si aún queda como "-" y es una visita, intentar extraer el nombre del campo visit_id
-    if (conductor === '-' && c.visit_id) {
-      conductor = 'Visita';
     }
 
     return { conductor, destino };

@@ -112,7 +112,7 @@ export default function VisitasPage() {
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
             // CORRECCIÓN: Guardamos el nombre en el formato que espera el historial
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch} (Visita)`,
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });
         }
