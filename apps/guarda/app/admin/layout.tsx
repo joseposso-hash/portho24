@@ -2,10 +2,37 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false); // Cerrado por defecto en celular
+  const [isOpen, setIsOpen] = useState(false);
+  const [nombreAdmin, setNombreAdmin] = useState('Administrador');
+  const [nombreConjunto, setNombreConjunto] = useState('Mi Conjunto');
+
+  // 1. Cargar datos del administrador y del conjunto
+  useEffect(() => {
+    async function cargarPerfil() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('full_name, tenant_id, tenants(name)')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setNombreAdmin(profile.full_name || 'Administrador');
+        // Supabase puede devolver el tenant como objeto o arreglo
+        const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
+        if (tenantData?.name) {
+          setNombreConjunto(tenantData.name);
+        }
+      }
+    }
+    cargarPerfil();
+  }, []);
 
   // Efecto para abrir el menú por defecto en pantallas grandes
   useEffect(() => {
@@ -41,14 +68,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        {/* Perfil */}
+        {/* Perfil (AHORA DINÁMICO) */}
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
           <div className="min-w-[40px] h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
-            AD
+            {nombreAdmin.charAt(0).toUpperCase()}
           </div>
           {isOpen && (
             <div className="overflow-hidden">
-              <p className="text-sm font-bold text-slate-800 truncate">Admin Portho</p>
+              <p className="text-sm font-bold text-slate-800 truncate">{nombreAdmin}</p>
               <p className="text-xs text-slate-500 truncate">Administrador</p>
             </div>
           )}
@@ -70,9 +97,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
           <Link href="/admin/directorio" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
             <span className="text-xl">📖</span> {isOpen && <span className="text-sm">Directorio</span>}
-          </Link>
-                    <Link href="/admin/reservas" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-            <span className="text-xl">📅</span> {isOpen && <span className="text-sm">Reservas</span>}
           </Link>
           <Link href="/admin/usuarios" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900">
             <span className="text-xl">👥</span> {isOpen && <span className="text-sm">Residentes</span>}
@@ -98,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
-        {/* BARRA SUPERIOR MÓVIL (solo se ve en celular) */}
+        {/* BARRA SUPERIOR MÓVIL */}
         <div className="md:hidden bg-white h-16 flex items-center px-4 border-b border-slate-200">
           <button onClick={() => setIsOpen(true)} className="text-2xl text-slate-600 mr-4">
             ☰
