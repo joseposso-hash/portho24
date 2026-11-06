@@ -46,10 +46,10 @@ export default function ResidentePage() {
     if (!user) { router.push('/login'); return; }
 
     const { data: profile } = await supabase
-      .from('users')
-      .select('*, units(*, towers(*))')
-      .eq('id', user.id)
-      .maybeSingle();
+  .from('users')
+  .select('*, units(*, towers(*, tenants(*)))')
+  .eq('id', user.id)
+  .maybeSingle();
 
     if (profile && profile.units) {
       setMiUnidad(profile.units);
@@ -174,7 +174,7 @@ export default function ResidentePage() {
               <div>
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente}</h1>
-                <p className="text-xs text-blue-200">{miUnidad.towers.name} - Casa {miUnidad.code}</p>
+                <p className="text-xs text-blue-200">{miUnidad.towers.tenants.name} - Apto {miUnidad.code}</p>
               </div>
             </div>
             <button onClick={() => router.push('/login')} className="bg-white/10 px-3 py-1.5 rounded-lg text-xs hover:bg-white/20">Salir</button>
