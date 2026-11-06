@@ -13,7 +13,7 @@ export default function VisitasPage() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Solo necesitamos las casas (units), no las torres
+  // Solo necesitamos las casas (units)
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
@@ -111,7 +111,8 @@ export default function VisitasPage() {
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            notes: `Visita no anunciada: ${nombre} - Destino: Casa ${unitSearch}`,
+            // CORRECCIÓN: Guardamos el nombre en el formato que espera el historial
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch} (Visita)`,
             photo_url: urlVeh
           });
         }

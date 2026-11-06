@@ -51,14 +51,19 @@ export default function AdminPaquetes() {
             onChange={(e) => setBusqueda(e.target.value)}
             className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
           />
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500">Filtrar fecha:</span>
+          
+          {/* DISEÑO DE FECHA CORREGIDO */}
+          <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2">
+            <span className="text-xs font-bold text-slate-500 uppercase">Fecha:</span>
             <input 
               type="date" 
               value={fechaFiltro}
               onChange={(e) => setFechaFiltro(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
+              className="text-sm text-slate-900 focus:outline-none bg-transparent"
             />
+            {fechaFiltro && (
+              <button onClick={() => setFechaFiltro('')} className="text-xs text-red-500 font-bold ml-2">X</button>
+            )}
           </div>
         </div>
 
