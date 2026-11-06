@@ -55,23 +55,24 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // FUNCIÓN CORREGIDA PARA EXTRAER DATOS DEL VEHÍCULO
+  // 🛠️ LÓGICA CORREGIDA PARA EXTRAER DATOS
   const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    // 1. Intentar extraer el Conductor (funciona para manuales y visitas)
+    // Buscamos "Conductor:" (formato manual y formato visita)
     const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
     if (matchCond) {
       conductor = matchCond[1].trim();
-    } else if (notes.includes('Visita:')) {
-      // Si no hay "Conductor:", pero dice "Visita:", extraemos el nombre de ahí
+    } 
+    // Si por alguna razón no hay "Conductor:", buscamos "Visita:" (por retrocompatibilidad)
+    else if (notes.includes('Visita:')) {
       const matchVisita = notes.match(/Visita:\s*([^-]+)/i);
       if (matchVisita) conductor = matchVisita[1].trim();
     }
 
-    // 2. Intentar extraer el Destino
+    // Buscamos "Destino:"
     const matchDest = notes.match(/Destino:\s*([^-]+)/i);
     if (matchDest) {
       destino = matchDest[1].trim();

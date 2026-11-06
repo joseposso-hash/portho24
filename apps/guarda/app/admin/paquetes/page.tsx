@@ -52,18 +52,15 @@ export default function AdminPaquetes() {
             className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
           />
           
-          {/* DISEÑO DE FECHA CORREGIDO */}
-          <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2">
-            <span className="text-xs font-bold text-slate-500 uppercase">Fecha:</span>
+          {/* FILTRO DE FECHA CORREGIDO */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <span className="text-sm font-medium text-slate-700 whitespace-nowrap">Filtrar fecha:</span>
             <input 
               type="date" 
               value={fechaFiltro}
               onChange={(e) => setFechaFiltro(e.target.value)}
-              className="text-sm text-slate-900 focus:outline-none bg-transparent"
+              className="w-full md:w-auto rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
             />
-            {fechaFiltro && (
-              <button onClick={() => setFechaFiltro('')} className="text-xs text-red-500 font-bold ml-2">X</button>
-            )}
           </div>
         </div>
 
