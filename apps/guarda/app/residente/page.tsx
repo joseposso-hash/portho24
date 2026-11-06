@@ -20,7 +20,7 @@ export default function ResidentePage() {
   const [qrGenerado, setQrGenerado] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [misVisitas, setMisVisitas] = useState<any[]>([]);
-  const [visitasIngresadas, setVisitasIngresadas] = useState<any[]>([]); // <-- NUEVO
+  const [visitasIngresadas, setVisitasIngresadas] = useState<any[]>([]);
 
   // Estados para Reservas
   const [areas, setAreas] = useState<any[]>([]);
@@ -55,31 +55,23 @@ export default function ResidentePage() {
         setMiUnidad(profile.units);
         setNombreResidente(profile.full_name);
 
-        // Cargar paquetes pendientes
         const { data: packs } = await supabase
           .from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
 
-        // Cargar visitas PENDIENTES (authorized)
         const { data: vis } = await supabase
           .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
 
-        // Cargar visitas INGRESADAS (checked_in)
         const { data: visIn } = await supabase
           .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
 
-        // Cargar áreas y reservas
         const { data: areasData } = await supabase.from('areas_comunes').select('*');
         const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).order('date', { ascending: true });
-
-        // Cargar PQRS
         const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false });
-
-        // Cargar comunicados
         const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
         if (packs) setPaquetes(packs);
         if (vis) setMisVisitas(vis);
-        if (visIn) setVisitasIngresadas(visIn); // <-- GUARDAMOS LAS INGRESADAS
+        if (visIn) setVisitasIngresadas(visIn);
         if (areasData) setAreas(areasData);
         if (reservasData) setMisReservas(reservasData);
         if (pqrsData) setMisPqrs(pqrsData);
@@ -230,14 +222,14 @@ export default function ResidentePage() {
 
           {tab === 'visitas' && (
             <div>
-              {/* VISITAS INGRESADAS (NUEVO) */}
+              {/* VISITAS INGRESADAS */}
               {visitasIngresadas.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-emerald-700 mb-2">✅ Invitados que ya ingresaron:</h3>
                   {visitasIngresadas.map(v => (
                     <div key={v.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2 flex justify-between items-center">
                       <div>
-                        <p className="text-sm font-semibold text-emerald-900">{(v.visitors as any)?.full_name}</p>
+                        <p className="text-sm font-semibold text-emerald-900">{(Array.isArray(v.visitors) ? v.visitors[0] : v.visitors)?.full_name}</p>
                         <p className="text-xs text-emerald-600">Ingresó: {new Date(v.check_in_at).toLocaleTimeString('es-CO')}</p>
                       </div>
                     </div>
@@ -245,27 +237,30 @@ export default function ResidentePage() {
                 </div>
               )}
 
-              {/* VISITAS PENDIENTES */}
+              {/* VISITAS PENDIENTES (CORREGIDO) */}
               {misVisitas.length > 0 && !qrGenerado && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-700 mb-2">Tus visitas pendientes:</h3>
-                  {misVisitas.map(v => (
-                    <div key={v.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{(v.visitors as any)?.full_name}</p>
-                        <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
+                  {misVisitas.map(v => {
+                    // Extraer datos del visitante de forma segura
+                    const visitorData = Array.isArray(v.visitors) ? v.visitors[0] : v.visitors;
+                    return (
+                      <div key={v.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{visitorData?.full_name || 'Sin nombre'}</p>
+                          <p className="text-xs text-slate-500">{visitorData?.doc_number || 'Sin doc'}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { 
+                            setQrGenerado(v.id); 
+                            setNombreVisita(visitorData?.full_name || ''); 
+                            setDocVisita(visitorData?.doc_number || ''); 
+                          }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
+                          <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        {/* CORRECCIÓN: Pasamos el nombre y doc */}
-                        <button onClick={() => { 
-                          setQrGenerado(v.id); 
-                          setNombreVisita((v.visitors as any)?.full_name || ''); 
-                          setDocVisita((v.visitors as any)?.doc_number || ''); 
-                        }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
-                        <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
