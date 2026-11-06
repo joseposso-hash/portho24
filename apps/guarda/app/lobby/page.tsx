@@ -16,29 +16,20 @@ export default function LobbyPage() {
   const [pin, setPin] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Estados para el destinatario (solo casas/units)
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
 
-  // 1. Obtener el Tenant y cargar TODAS las unidades (casas)
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      
       const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
       
       if (profile) {
         setTenantId(profile.tenant_id);
-        
-        // Traemos todas las casas de este cliente, ordenadas por número
-        const { data: unitsData } = await supabase
-          .from('units')
-          .select('id, code')
-          .order('code', { ascending: true });
-          
-        if (unitsData) setUnits(unitsData);
+        const { data } = await supabase.from('units').select('id, code').order('code');
+        if (data) setUnits(data);
       }
     }
     init();
@@ -47,29 +38,21 @@ export default function LobbyPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!photo || !unitId || !tenantId) {
-      setErrorMsg('Por favor, sube una foto y selecciona la casa.');
+      setErrorMsg('Por favor, sube una foto y escribe una casa válida.');
       return;
     }
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      // 1. Subir la foto
       const fileExt = photo.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('evidences')
-        .upload(fileName, photo, { contentType: photo.type });
+      const { error: uploadError } = await supabase.storage.from('evidences').upload(fileName, photo, { contentType: photo.type });
 
       if (uploadError) throw uploadError;
-      
       const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
-
-      // 2. Generar PIN
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // 3. Guardar en base de datos
       const { error: dbError } = await supabase.from('packages').insert({
         tenant_id: tenantId,
         recipient_unit_id: unitId,
@@ -99,9 +82,7 @@ export default function LobbyPage() {
           <h1 className="text-2xl font-bold text-slate-900">📦 Recibir Paquete</h1>
           <p className="text-sm text-slate-500">Ingresa los datos del paquete recibido</p>
         </div>
-        <button onClick={() => router.push('/')} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">
-          ← Volver
-        </button>
+        <button onClick={() => router.push('/')} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">← Volver</button>
       </header>
 
       {pin ? (
@@ -134,7 +115,7 @@ export default function LobbyPage() {
             <input type="text" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Ej: AMZ-123456" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
           </label>
 
-          {/* SELECTOR DE DESTINATARIO (SOLO CASAS) */}
+          {/* SELECTOR DE DESTINATARIO (SOLO TEXTO, SIN DATALIST) */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
             <p className="text-sm font-bold text-slate-800">📍 Destinatario (Residente)</p>
             
@@ -142,11 +123,9 @@ export default function LobbyPage() {
               <span className="text-xs font-medium text-slate-600">Casa / Unidad</span>
               <input
                 type="text"
-                list="lista-casas-lobby"
                 value={unitSearch}
                 onChange={(e) => {
                   setUnitSearch(e.target.value);
-                  // Busca la casa exacta por su número
                   const found = units.find(u => u.code.toLowerCase() === e.target.value.toLowerCase());
                   setUnitId(found ? found.id : '');
                 }}
@@ -154,9 +133,6 @@ export default function LobbyPage() {
                 className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900"
                 required
               />
-              <datalist id="lista-casas-lobby">
-                {units.map(u => <option key={u.id} value={u.code} />)}
-              </datalist>
             </label>
           </div>
 

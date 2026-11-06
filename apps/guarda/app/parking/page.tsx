@@ -7,7 +7,6 @@ function ParkingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Parámetros que vienen desde la Visita No Anunciada
   const visitIdParam = searchParams.get('visit_id');
   const nombreParam = searchParams.get('nombre');
   const docParam = searchParams.get('doc');
@@ -47,7 +46,6 @@ function ParkingContent() {
     const placaUpper = placa.toUpperCase();
 
     try {
-      // Buscar vehículo SIN .single() para evitar el error 406
       let { data: vehiculosEncontrados } = await supabase
         .from('vehicles')
         .select('*')
@@ -109,25 +107,22 @@ function ParkingContent() {
     setLoading(true);
     
     try {
-      // 1. Subir Foto del Conductor
       const fileExtCond = fotoConductor.name.split('.').pop();
       const fileNameCond = `conductores/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtCond}`;
       const { error: errUpCond } = await supabase.storage.from('evidences').upload(fileNameCond, fotoConductor, { contentType: fotoConductor.type });
       if (errUpCond) throw errUpCond;
       const { data: { publicUrl: urlConductor } } = supabase.storage.from('evidences').getPublicUrl(fileNameCond);
 
-      // 2. Subir Foto del Vehículo
       const fileExtVeh = fotoVehiculo.name.split('.').pop();
       const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
       const { error: errUpVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
       if (errUpVeh) throw errUpVeh;
       const { data: { publicUrl: urlVehiculo } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
 
-      // 3. Guardar en base de datos
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
-        visit_id: visitIdParam || null, // <-- VINCULAMOS A LA VISITA
+        visit_id: visitIdParam || null, 
         status: 'active',
         check_in_at: new Date().toISOString(),
         created_at: new Date().toISOString(),

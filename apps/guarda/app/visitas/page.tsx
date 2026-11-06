@@ -38,7 +38,7 @@ export default function VisitasPage() {
   async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
-      setErrorMsg('Por favor, llena los datos y selecciona la casa.');
+      setErrorMsg('Por favor, llena los datos y escribe una casa válida.');
       return;
     }
     
@@ -46,7 +46,6 @@ export default function VisitasPage() {
     setErrorMsg(null);
 
     try {
-      // 1. Guardar Visitante
       const { data: visitor, error: errVis } = await supabase
         .from('visitors')
         .insert({ tenant_id: tenantId, full_name: nombre, doc_number: documento })
@@ -54,7 +53,6 @@ export default function VisitasPage() {
 
       if (errVis) throw errVis;
 
-      // 2. Subir foto del visitante
       let urlVisitante = null;
       if (fotoVisitante) {
         const fileExt = fotoVisitante.name.split('.').pop();
@@ -66,7 +64,6 @@ export default function VisitasPage() {
         }
       }
 
-      // 3. Guardar la Visita
       const { data: visita, error: errVisita } = await supabase
         .from('visits')
         .insert({
@@ -82,7 +79,6 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
-      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS
       if (vieneEnVehiculo) {
         router.push(`/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${documento}&casa=${encodeURIComponent(unitSearch)}`);
       } else {
@@ -122,12 +118,11 @@ export default function VisitasPage() {
               <p className="text-sm font-bold text-slate-800">📍 Destino de la visita</p>
               <label className="block">
                 <span className="text-xs font-medium text-slate-600">Casa / Unidad</span>
-                <input type="text" list="lista-casas-visita" value={unitSearch} onChange={(e) => {
+                <input type="text" value={unitSearch} onChange={(e) => {
                   setUnitSearch(e.target.value);
                   const found = units.find(u => u.code.toLowerCase() === e.target.value.toLowerCase());
                   setUnitId(found ? found.id : '');
                 }} placeholder="Escribe la casa (ej. 125)" className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" required />
-                <datalist id="lista-casas-visita">{units.map(u => <option key={u.id} value={u.code} />)}</datalist>
               </label>
             </div>
 
@@ -148,7 +143,7 @@ export default function VisitasPage() {
                 <span className="text-sm font-bold text-amber-800">El visitante viene en vehículo</span>
               </label>
               <p className="text-xs text-amber-600 mt-2">
-                Si marcas esta opción, al guardar la visita serás redirigido al módulo de Vehículos para registrar la placa y las fotos.
+                Si marcas esta opción, al guardar la visita serás redirigido al módulo de Vehículos.
               </p>
             </div>
 
