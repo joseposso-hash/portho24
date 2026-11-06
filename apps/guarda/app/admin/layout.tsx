@@ -16,11 +16,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
       const { data: profile } = await supabase
         .from('users')
         .select('full_name, tenant_id, tenants(name)')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profile) {
         setNombreAdmin(profile.full_name || 'Administrador');
