@@ -66,7 +66,7 @@ export default function VisitasPage() {
         }
       }
 
-      // 3. Guardar la Visita (SOLO la visita, NO el vehículo)
+      // 3. Guardar la Visita
       const { data: visita, error: errVisita } = await supabase
         .from('visits')
         .insert({
@@ -82,7 +82,7 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
-      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS A /parking
+      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS AL MÓDULO DE VEHÍCULOS
       if (vieneEnVehiculo) {
         router.push(`/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${documento}&casa=${encodeURIComponent(unitSearch)}`);
       } else {
@@ -142,12 +142,14 @@ export default function VisitasPage() {
               </label>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={vieneEnVehiculo} onChange={(e) => setVieneEnVehiculo(e.target.checked)} className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]" />
-                <span className="text-sm font-bold text-slate-700">El visitante viene en vehículo</span>
+                <span className="text-sm font-bold text-amber-800">El visitante viene en vehículo</span>
               </label>
-              <p className="text-xs text-slate-500 mt-2">Si marca esta opción, será redirigido al módulo de vehículos para completar el registro.</p>
+              <p className="text-xs text-amber-600 mt-2">
+                Si marcas esta opción, al guardar la visita serás redirigido al módulo de Vehículos para registrar la placa y las fotos.
+              </p>
             </div>
 
             <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white transition hover:bg-[#152945] disabled:opacity-50 mt-2">

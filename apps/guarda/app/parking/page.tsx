@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
-export default function ParkingPage() {
+function ParkingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -47,7 +47,7 @@ export default function ParkingPage() {
     const placaUpper = placa.toUpperCase();
 
     try {
-      // Buscar vehículo sin .single() para evitar error 406
+      // Buscar vehículo SIN .single() para evitar el error 406
       let { data: vehiculosEncontrados } = await supabase
         .from('vehicles')
         .select('*')
@@ -127,7 +127,7 @@ export default function ParkingPage() {
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
-        visit_id: visitIdParam || null, // <-- VINCULAMOS A LA VISITA SI VIENE DE ALLÍ
+        visit_id: visitIdParam || null, // <-- VINCULAMOS A LA VISITA
         status: 'active',
         check_in_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
@@ -256,5 +256,13 @@ export default function ParkingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ParkingPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Cargando...</div>}>
+      <ParkingContent />
+    </Suspense>
   );
 }
