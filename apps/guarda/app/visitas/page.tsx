@@ -102,16 +102,16 @@ export default function VisitasPage() {
         }
 
         if (veh) {
-          // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Guardamos la sesión con el nombre en las notas y el visit_id
+          // 🔥 AQUÍ APLICAMOS EL MISMO FORMATO QUE EL CONTROL MANUAL
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id, // Vinculamos la visita
+            visit_id: visita.id, 
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, // Formato correcto
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, // Formato idéntico al manual
             photo_url: urlVeh
           });
 

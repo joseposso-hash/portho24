@@ -27,18 +27,7 @@ export default function HistorialPage() {
 
     let qPacks = supabase.from('packages').select('*, units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     let qVisits = supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
-    
-    // 🔥 CONSULTA CON EL JOIN CORRECTO
-    let qCars = supabase.from('parking_sessions')
-      .select(`
-        *, 
-        vehicles(plate), 
-        visits(
-          visitors(full_name)
-        )
-      `)
-      .order('created_at', { ascending: false })
-      .limit(100);
+    let qCars = supabase.from('parking_sessions').select('*, vehicles(plate)').order('created_at', { ascending: false }).limit(100);
 
     if (inicioDia && finDia) {
       qPacks = qPacks.gte('created_at', inicioDia).lte('created_at', finDia);
@@ -66,36 +55,25 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // 🔥 LÓGICA DEFINITIVA: Busca en el JOIN primero, luego en notas
+  // 🔥 LA MISMA LÓGICA PARA AMBOS CASOS (manual y visita)
   const getDatosVehiculo = (c: any) => {
+    const notes = c.notes || '';
     let conductor = 'Sin nombre';
     let destino = 'No especificado';
 
-    // 1. Intentar desde el JOIN (visitas)
-    if (c.visits) {
-      const visitData = Array.isArray(c.visits) ? c.visits[0] : c.visits;
-      if (visitData?.visitors) {
-        const visitorData = Array.isArray(visitData.visitors) ? visitData.visitors[0] : visitData.visitors;
-        if (visitorData?.full_name) conductor = visitorData.full_name;
-      }
+    // Buscar "Conductor:" en las notas (ambos formatos lo tendrán)
+    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+    if (matchCond) conductor = matchCond[1].trim();
+    
+    // Si no encuentra, buscar el formato viejo "Visita no anunciada:"
+    if (conductor === 'Sin nombre' && notes.includes('Visita no anunciada:')) {
+      const matchVisita = notes.match(/Visita no anunciada:\s*([^-]+)/i);
+      if (matchVisita) conductor = matchVisita[1].trim();
     }
 
-    // 2. Si no hay JOIN, buscar en las notas (manuales)
-    if (conductor === 'Sin nombre' && c.notes) {
-      const matchCond = c.notes.match(/Conductor:\s*([^-]+)/i);
-      if (matchCond) conductor = matchCond[1].trim();
-      // Si aún no encuentra y es una visita vieja, buscar "Visita no anunciada:"
-      else if (c.notes.includes('Visita no anunciada:')) {
-        const matchVisita = c.notes.match(/Visita no anunciada:\s*([^-]+)/i);
-        if (matchVisita) conductor = matchVisita[1].trim();
-      }
-    }
-
-    // 3. Extraer Destino
-    if (c.notes) {
-      const matchDest = c.notes.match(/Destino:\s*([^-]+)/i);
-      if (matchDest) destino = matchDest[1].trim();
-    }
+    // Buscar Destino
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    if (matchDest) destino = matchDest[1].trim();
 
     return { conductor, destino };
   };
