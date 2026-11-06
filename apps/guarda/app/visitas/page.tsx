@@ -101,17 +101,17 @@ export default function VisitasPage() {
           veh = newVeh;
         }
 
-                if (veh) {
+        if (veh) {
+          // 🔥 AQUÍ ESTÁ EL FORMATO EXACTO QUE FUNCIONA
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id,
+            visit_id: visita.id, 
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // ⚠️ ESTA ES LA LÍNEA QUE DEBE SER IDÉNTICA AL MÓDULO DE VEHÍCULOS:
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, 
             photo_url: urlVeh
           });
 
