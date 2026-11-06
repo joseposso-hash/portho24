@@ -18,10 +18,7 @@ export default function VisitasPage() {
   const [unitSearch, setUnitSearch] = useState('');
 
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
-  const [placaVehiculo, setPlacaVehiculo] = useState('');
-  const [tipoVehiculo, setTipoVehiculo] = useState('car');
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
-  const [fotoVehiculo, setFotoVehiculo] = useState<File | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -38,7 +35,7 @@ export default function VisitasPage() {
     init();
   }, []);
 
-    async function registrarVisita(e: React.FormEvent) {
+  async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
       setErrorMsg('Por favor, llena los datos y selecciona la casa.');
@@ -69,7 +66,7 @@ export default function VisitasPage() {
         }
       }
 
-      // 3. Guardar la Visita
+      // 3. Guardar la Visita (SOLO la visita, NO el vehículo)
       const { data: visita, error: errVisita } = await supabase
         .from('visits')
         .insert({
@@ -85,7 +82,7 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
-      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS AL MÓDULO DE VEHÍCULOS
+      // 4. SI VIENE EN VEHÍCULO, REDIRIGIMOS A /parking
       if (vieneEnVehiculo) {
         router.push(`/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${documento}&casa=${encodeURIComponent(unitSearch)}`);
       } else {
@@ -150,32 +147,7 @@ export default function VisitasPage() {
                 <input type="checkbox" checked={vieneEnVehiculo} onChange={(e) => setVieneEnVehiculo(e.target.checked)} className="w-4 h-4 text-[#1E3A5F] rounded focus:ring-[#1E3A5F]" />
                 <span className="text-sm font-bold text-slate-700">El visitante viene en vehículo</span>
               </label>
-
-              {vieneEnVehiculo && (
-                <div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-slate-500">Placa</label>
-                      <input type="text" value={placaVehiculo} onChange={(e) => setPlacaVehiculo(e.target.value.toUpperCase())} className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 uppercase" placeholder="ABC123" maxLength={6} />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">Tipo</label>
-                      <select value={tipoVehiculo} onChange={(e) => setTipoVehiculo(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
-                        <option value="car">Carro</option>
-                        <option value="motorcycle">Moto</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center justify-center w-full h-16 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
-                    <span className="flex flex-col items-center space-y-1">
-                      <span className="text-xl">🚗</span>
-                      <span className="font-medium text-slate-600 text-xs">{fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}</span>
-                    </span>
-                    <input type="file" accept="image/*" capture="environment" onChange={(e) => setFotoVehiculo(e.target.files?.[0] || null)} className="hidden" />
-                  </label>
-                </div>
-              )}
+              <p className="text-xs text-slate-500 mt-2">Si marca esta opción, será redirigido al módulo de vehículos para completar el registro.</p>
             </div>
 
             <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white transition hover:bg-[#152945] disabled:opacity-50 mt-2">
@@ -186,7 +158,7 @@ export default function VisitasPage() {
           <div className="text-center space-y-6 py-8">
             <div className="mx-auto h-20 w-20 bg-emerald-100 rounded-full flex items-center justify-center text-4xl">✅</div>
             <h2 className="text-2xl font-bold text-slate-900">Ingreso Registrado</h2>
-            <button onClick={() => { setSuccess(false); setNombre(''); setDocumento(''); setUnitId(''); setUnitSearch(''); setVieneEnVehiculo(false); setPlacaVehiculo(''); setFotoVisitante(null); setFotoVehiculo(null); }} className="mt-4 rounded-xl bg-[#1E3A5F] px-6 py-3 font-semibold text-white hover:bg-[#152945]">Registrar otra visita</button>
+            <button onClick={() => { setSuccess(false); setNombre(''); setDocumento(''); setUnitId(''); setUnitSearch(''); setVieneEnVehiculo(false); setFotoVisitante(null); }} className="mt-4 rounded-xl bg-[#1E3A5F] px-6 py-3 font-semibold text-white hover:bg-[#152945]">Registrar otra visita</button>
           </div>
         )}
       </div>
