@@ -47,10 +47,10 @@ export default function ResidentePage() {
 
       // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
       const { data: profile } = await supabase
-  .from('users')
-  .select('*, units(*, towers(*))')
-  .eq('id', user.id)
-  .maybeSingle(); // <-- Cambio clave para evitar el 406
+        .from('users')
+        .select('*, units(*, towers(*))')
+        .eq('id', user.id)
+        .maybeSingle();
 
       if (profile && profile.units) {
         setMiUnidad(profile.units);
