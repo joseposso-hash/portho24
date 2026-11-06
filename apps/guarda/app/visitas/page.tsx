@@ -13,7 +13,6 @@ export default function VisitasPage() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Solo necesitamos las casas (units)
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
@@ -32,18 +31,14 @@ export default function VisitasPage() {
       
       if (profile) {
         setTenantId(profile.tenant_id);
-        // Cargar TODAS las casas del cliente
-        const { data } = await supabase
-          .from('units')
-          .select('id, code')
-          .order('code');
+        const { data } = await supabase.from('units').select('id, code').order('code');
         if (data) setUnits(data);
       }
     }
     init();
   }, []);
 
-    async function registrarVisita(e: React.FormEvent) {
+  async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
       setErrorMsg('Por favor, llena los datos y selecciona la casa.');
@@ -54,6 +49,7 @@ export default function VisitasPage() {
     setErrorMsg(null);
 
     try {
+      // 1. Guardar Visitante
       const { data: visitor, error: errVis } = await supabase
         .from('visitors')
         .insert({ tenant_id: tenantId, full_name: nombre, doc_number: documento })
@@ -61,6 +57,7 @@ export default function VisitasPage() {
 
       if (errVis) throw errVis;
 
+      // 2. Subir foto del visitante
       let urlVisitante = null;
       if (fotoVisitante) {
         const fileExt = fotoVisitante.name.split('.').pop();
@@ -72,6 +69,7 @@ export default function VisitasPage() {
         }
       }
 
+      // 3. Guardar la Visita
       const { data: visita, error: errVisita } = await supabase
         .from('visits')
         .insert({
@@ -87,6 +85,7 @@ export default function VisitasPage() {
 
       if (errVisita) throw errVisita;
 
+      // 4. Guardar el Vehículo (si aplica)
       if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
         const fileExtVeh = fotoVehiculo.name.split('.').pop();
         const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
@@ -103,16 +102,16 @@ export default function VisitasPage() {
         }
 
         if (veh) {
+          // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Guardamos la sesión con el nombre en las notas y el visit_id
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id, // <-- VINCULAMOS LA VISITA
+            visit_id: visita.id, // Vinculamos la visita
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // ⚠️ AQUÍ GUARDAMOS EL NOMBRE EN LAS NOTAS
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, // Formato correcto
             photo_url: urlVeh
           });
 
@@ -131,9 +130,7 @@ export default function VisitasPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-6 flex flex-col items-center">
       <header className="w-full max-w-lg mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">👤 Visita No Anunciada</h1>
-        </div>
+        <div><h1 className="text-2xl font-bold text-slate-900">👤 Visita No Anunciada</h1></div>
         <button onClick={() => router.push('/')} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">← Volver</button>
       </header>
 
@@ -154,25 +151,14 @@ export default function VisitasPage() {
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
               <p className="text-sm font-bold text-slate-800">📍 Destino de la visita</p>
-              
               <label className="block">
                 <span className="text-xs font-medium text-slate-600">Casa / Unidad</span>
-                <input 
-                  type="text" 
-                  list="lista-casas-visita" 
-                  value={unitSearch} 
-                  onChange={(e) => {
-                    setUnitSearch(e.target.value);
-                    const found = units.find(u => u.code.toLowerCase() === e.target.value.toLowerCase());
-                    setUnitId(found ? found.id : '');
-                  }} 
-                  placeholder="Escribe la casa (ej. 125)" 
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" 
-                  required 
-                />
-                <datalist id="lista-casas-visita">
-                  {units.map(u => <option key={u.id} value={u.code} />)}
-                </datalist>
+                <input type="text" list="lista-casas-visita" value={unitSearch} onChange={(e) => {
+                  setUnitSearch(e.target.value);
+                  const found = units.find(u => u.code.toLowerCase() === e.target.value.toLowerCase());
+                  setUnitId(found ? found.id : '');
+                }} placeholder="Escribe la casa (ej. 125)" className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900" required />
+                <datalist id="lista-casas-visita">{units.map(u => <option key={u.id} value={u.code} />)}</datalist>
               </label>
             </div>
 
@@ -181,9 +167,7 @@ export default function VisitasPage() {
               <label className="flex items-center justify-center w-full h-16 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
                   <span className="text-xl">🧑</span>
-                  <span className="font-medium text-slate-600 text-xs">
-                    {fotoVisitante ? '✅ Foto capturada' : 'Tomar foto del visitante'}
-                  </span>
+                  <span className="font-medium text-slate-600 text-xs">{fotoVisitante ? '✅ Foto capturada' : 'Tomar foto del visitante'}</span>
                 </span>
                 <input type="file" accept="image/*" capture="user" onChange={(e) => setFotoVisitante(e.target.files?.[0] || null)} className="hidden" />
               </label>
@@ -214,9 +198,7 @@ export default function VisitasPage() {
                   <label className="flex items-center justify-center w-full h-16 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                     <span className="flex flex-col items-center space-y-1">
                       <span className="text-xl">🚗</span>
-                      <span className="font-medium text-slate-600 text-xs">
-                        {fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}
-                      </span>
+                      <span className="font-medium text-slate-600 text-xs">{fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}</span>
                     </span>
                     <input type="file" accept="image/*" capture="environment" onChange={(e) => setFotoVehiculo(e.target.files?.[0] || null)} className="hidden" />
                   </label>
