@@ -30,7 +30,7 @@ export default function AdminPQRS() {
     const { data } = await supabase
       .from('pqrs')
       .select('*, units(code, towers(name))')
-      .eq('tenant_id', tId) // <-- Filtro dinámico por el cliente del admin
+      .eq('tenant_id', tId)
       .order('created_at', { ascending: false });
     
     if (data) setPqrs(data);
@@ -63,7 +63,7 @@ export default function AdminPQRS() {
         <h1 className="text-xl font-bold text-slate-800">Gestión de PQRS</h1>
       </header>
 
-      <div className="p-8 max-w-6xl mx-auto">
+      <div className="p-8 max-w-full mx-auto overflow-x-auto">
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           <button onClick={() => setFiltro('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtro === 'all' ? 'bg-[#1E3A5F] text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Todos</button>
           <button onClick={() => setFiltro('pending')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtro === 'pending' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Pendientes</button>
@@ -71,44 +71,47 @@ export default function AdminPQRS() {
           <button onClick={() => setFiltro('resolved')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtro === 'resolved' ? 'bg-emerald-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>Resueltos</button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-w-[800px]">
+          <table className="w-full text-left text-sm table-auto">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b">
               <tr>
-                <th className="px-6 py-4">Tipo</th>
-                <th className="px-6 py-4">Asunto</th>
-                <th className="px-6 py-4">Remitente</th>
-                <th className="px-6 py-4">Descripción</th>
-                <th className="px-6 py-4">Fecha</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Acción</th>
+                <th className="px-4 py-4 w-24">Tipo</th>
+                <th className="px-4 py-4 w-40">Asunto</th>
+                <th className="px-4 py-4 w-32">Remitente</th>
+                <th className="px-4 py-4">Descripción</th> {/* Columna flexible */}
+                <th className="px-4 py-4 w-24">Fecha</th>
+                <th className="px-4 py-4 w-28">Estado</th>
+                <th className="px-4 py-4 w-40">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Cargando...</td></tr>
               ) : pqrsFiltrados.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-400">No hay PQRS en esta categoría.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No hay PQRS en esta categoría.</td></tr>
               ) : (
                 pqrsFiltrados.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4"><span className="font-medium text-slate-800">{p.type}</span></td>
-                    <td className="px-6 py-4 font-medium text-slate-800">{p.subject}</td>
-                    <td className="px-6 py-4 text-xs font-semibold text-[#1E3A5F]">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
-                    <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{p.description}</td>
-                    <td className="px-6 py-4 text-xs text-slate-500">{new Date(p.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4"><span className="font-medium text-slate-800">{p.type}</span></td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{p.subject}</td>
+                    <td className="px-4 py-4 text-xs font-semibold text-[#1E3A5F]">
+                      {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                    </td>
+                    {/* DESCRIPCIÓN CON TRUNCATE PARA QUE NO SE DESBORDE */}
+                    <td className="px-4 py-4 text-slate-500 max-w-[200px] truncate">{p.description}</td>
+                    <td className="px-4 py-4 text-xs text-slate-500">{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-4">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${p.status === 'pending' ? 'bg-amber-100 text-amber-800' : p.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>
                         {p.status === 'pending' ? 'Pendiente' : p.status === 'in_progress' ? 'En Proceso' : 'Resuelto'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 flex items-center gap-2">
-                      <select value={p.status} onChange={(e) => cambiarEstado(p.id, e.target.value)} className="text-xs border border-slate-300 rounded p-1.5 bg-white text-slate-700 outline-none">
+                    <td className="px-4 py-4 flex items-center gap-2">
+                      <select value={p.status} onChange={(e) => cambiarEstado(p.id, e.target.value)} className="text-xs border border-slate-300 rounded p-1 bg-white text-slate-700 outline-none w-24">
                         <option value="pending">Pendiente</option>
                         <option value="in_progress">En Proceso</option>
                         <option value="resolved">Resuelto</option>
                       </select>
-                      <button onClick={() => { setPqrsSeleccionada(p); setRespuestaTexto(p.response || ''); }} className="text-xs bg-[#1E3A5F] text-white px-3 py-1.5 rounded hover:bg-[#152945] font-medium">Responder</button>
+                      <button onClick={() => { setPqrsSeleccionada(p); setRespuestaTexto(p.response || ''); }} className="text-xs bg-[#1E3A5F] text-white px-3 py-1.5 rounded hover:bg-[#152945] font-medium w-24">Responder</button>
                     </td>
                   </tr>
                 ))
