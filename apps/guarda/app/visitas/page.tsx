@@ -43,7 +43,7 @@ export default function VisitasPage() {
     init();
   }, []);
 
-  async function registrarVisita(e: React.FormEvent) {
+    async function registrarVisita(e: React.FormEvent) {
     e.preventDefault();
     if (!nombre || !documento || !unitId || !tenantId) {
       setErrorMsg('Por favor, llena los datos y selecciona la casa.');
@@ -102,19 +102,21 @@ export default function VisitasPage() {
           veh = newVeh;
         }
 
-                if (veh) {
-                    await supabase.from('parking_sessions').insert({
+        if (veh) {
+          const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id, // <-- ESTO YA ESTÁ BIEN
+            visit_id: visita.id, // <-- VINCULAMOS LA VISITA
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // ⚠️ ESTA ES LA LÍNEA QUE DEBES CAMBIAR:
+            // ⚠️ AQUÍ GUARDAMOS EL NOMBRE EN LAS NOTAS
             notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });
+
+          if (errSession) throw errSession;
         }
       }
 
