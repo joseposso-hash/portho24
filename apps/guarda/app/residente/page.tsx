@@ -55,32 +55,16 @@ export default function ResidentePage() {
         setMiUnidad(profile.units);
         setNombreResidente(profile.full_name);
 
-        const { data: packs } = await supabase
-          .from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
-
-        const { data: vis } = await supabase
-          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
-
-        const { data: visIn } = await supabase
-          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+        const { data: packs } = await supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
+        const { data: vis } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
+        const { data: visIn } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
 
         const { data: areasData } = await supabase.from('areas_comunes').select('*');
         
         const hoy = new Date().toISOString().split('T')[0];
-        const { data: reservasData } = await supabase
-          .from('reservas')
-          .select('*, areas_comunes(name, icon)')
-          .eq('unit_id', profile.units.id)
-          .gte('date', hoy)
-          .order('date', { ascending: true });
+        const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).gte('date', hoy).order('date', { ascending: true });
 
-        const { data: pqrsData } = await supabase
-          .from('pqrs')
-          .select('*')
-          .eq('unit_id', profile.units.id)
-          .order('created_at', { ascending: false })
-          .limit(3);
-
+        const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false }).limit(3);
         const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
         if (packs) setPaquetes(packs);
@@ -132,13 +116,10 @@ export default function ResidentePage() {
     e.preventDefault();
     if (!miUnidad || !reservaForm.areaId || !reservaForm.date || !reservaForm.startTime) return;
     setEnviandoReserva(true);
-
     const { error } = await supabase.from('reservas').insert({
       tenant_id: miUnidad.towers.tenant_id, area_id: reservaForm.areaId, unit_id: miUnidad.id,
-      date: reservaForm.date, start_time: reservaForm.startTime, end_time: reservaForm.endTime,
-      notes: reservaForm.notes, status: 'pending'
+      date: reservaForm.date, start_time: reservaForm.startTime, end_time: reservaForm.endTime, notes: reservaForm.notes, status: 'pending'
     });
-
     if (error) { alert('Error al reservar: ' + error.message); } 
     else {
       alert('✅ Reserva solicitada.');
@@ -154,12 +135,9 @@ export default function ResidentePage() {
     e.preventDefault();
     if (!miUnidad) return;
     setEnviandoPQRS(true);
-
     const { error } = await supabase.from('pqrs').insert({
-      tenant_id: miUnidad.towers.tenant_id, unit_id: miUnidad.id, type: tipoPQRS,
-      subject: asuntoPQRS, description: descPQRS, status: 'pending'
+      tenant_id: miUnidad.towers.tenant_id, unit_id: miUnidad.id, type: tipoPQRS, subject: asuntoPQRS, description: descPQRS, status: 'pending'
     });
-
     if (error) { alert('Error al enviar: ' + error.message); } 
     else {
       alert('✅ PQRS enviada.');
@@ -171,7 +149,6 @@ export default function ResidentePage() {
   }
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50 font-medium text-slate-500">Cargando App Residente...</div>;
-  
   if (!miUnidad) return (
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
@@ -250,7 +227,6 @@ export default function ResidentePage() {
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-700 mb-2">Tus visitas pendientes:</h3>
                   {misVisitas.map(v => {
-                    // CORRECCIÓN: Extraer datos del visitante de forma segura
                     const visitorData = Array.isArray(v.visitors) ? v.visitors[0] : v.visitors;
                     return (
                       <div key={v.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center">
