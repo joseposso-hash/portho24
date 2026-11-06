@@ -44,10 +44,21 @@ export default function AdminPaquetes() {
 
       <div className="p-8 max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
-          <input type="text" placeholder="Buscar por courier o guía..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none" />
-          <div className="relative w-full md:w-auto">
-            <input type="date" value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none" />
-            <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-slate-500 font-bold">FILTRAR FECHA (OPCIONAL)</span>
+          <input 
+            type="text" 
+            placeholder="Buscar por courier o guía..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="w-full md:w-1/2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">Filtrar fecha:</span>
+            <input 
+              type="date" 
+              value={fechaFiltro}
+              onChange={(e) => setFechaFiltro(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
+            />
           </div>
         </div>
 
@@ -70,12 +81,24 @@ export default function AdminPaquetes() {
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
-                  <td className="px-4 py-3 font-semibold text-slate-900">{p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span></td>
-                  <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">
+                    {p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
+                    {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                  </td>
                   <td className="px-4 py-3 font-mono text-slate-400">••••••</td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                  <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{p.status === 'received' ? 'Pendiente' : 'Entregado'}</span></td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {p.status === 'received' ? 'Pendiente' : 'Entregado'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
