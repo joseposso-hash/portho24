@@ -55,27 +55,19 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // 🔥 LA MISMA LÓGICA PARA AMBOS CASOS (manual y visita)
-  const getDatosVehiculo = (c: any) => {
-    const notes = c.notes || '';
-    let conductor = 'Sin nombre';
-    let destino = 'No especificado';
-
-    // Buscar "Conductor:" en las notas (ambos formatos lo tendrán)
-    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
-    if (matchCond) conductor = matchCond[1].trim();
-    
-    // Si no encuentra, buscar el formato viejo "Visita no anunciada:"
-    if (conductor === 'Sin nombre' && notes.includes('Visita no anunciada:')) {
-      const matchVisita = notes.match(/Visita no anunciada:\s*([^-]+)/i);
-      if (matchVisita) conductor = matchVisita[1].trim();
+  // 🔥 FUNCIÓN PARA BUSCAR EL NOMBRE DEL VISITANTE POR ID
+  const buscarNombreVisitante = async (visitId: string) => {
+    const { data } = await supabase
+      .from('visits')
+      .select('visitors(full_name)')
+      .eq('id', visitId)
+      .single();
+      
+    if (data && data.visitors) {
+      const visitorData = Array.isArray(data.visitors) ? data.visitors[0] : data.visitors;
+      return visitorData.full_name;
     }
-
-    // Buscar Destino
-    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
-    if (matchDest) destino = matchDest[1].trim();
-
-    return { conductor, destino };
+    return null;
   };
 
   return (
@@ -151,13 +143,28 @@ export default function HistorialPage() {
               {loading ? <tr><td colSpan={8} className="p-6 text-center">Cargando...</td></tr> : 
                vehiculosFiltrados.length === 0 ? <tr><td colSpan={8} className="p-6 text-center text-slate-400">No hay vehículos registrados.</td></tr> :
                vehiculosFiltrados.map(c => {
-                 const d = getDatosVehiculo(c);
+                 // Buscar el nombre del conductor
+                 let conductor = 'Sin nombre';
+                 const notes = c.notes || '';
+                 const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+                 if (matchCond) {
+                   conductor = matchCond[1].trim();
+                 } else if (c.visit_id) {
+                   // Si no está en las notas, marcamos que es una visita
+                   conductor = 'Visita';
+                 }
+
+                 // Destino
+                 let destino = 'No especificado';
+                 const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+                 if (matchDest) destino = matchDest[1].trim();
+
                  return (
                   <tr key={c.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">{c.photo_url ? <img src={c.photo_url} className="h-10 w-10 object-cover rounded shadow-sm" /> : <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200"></div>}</td>
                     <td className="px-4 py-3 font-bold text-slate-900">{(c.vehicles as any)?.plate}</td>
-                    <td className="px-4 py-3 text-xs font-medium text-slate-700">{d.conductor}</td>
-                    <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{d.destino}</td>
+                    <td className="px-4 py-3 text-xs font-medium text-slate-700">{conductor}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{destino}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-600">${(c.amount_paid || 0).toLocaleString('es-CO')}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>{c.status === 'active' ? 'Adentro' : 'Salió'}</span></td>
                     <td className="px-4 py-3 text-xs text-slate-600">{c.check_in_at ? new Date(c.check_in_at).toLocaleTimeString('es-CO') : '-'}</td>
