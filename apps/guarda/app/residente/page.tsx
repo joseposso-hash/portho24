@@ -45,11 +45,12 @@ export default function ResidentePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
 
+      // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
       const { data: profile } = await supabase
         .from('users')
         .select('*, units(*, towers(*))')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profile && profile.units) {
         setMiUnidad(profile.units);
@@ -149,10 +150,12 @@ export default function ResidentePage() {
   }
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50 font-medium text-slate-500">Cargando App Residente...</div>;
+  
   if (!miUnidad) return (
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
         <h1 className="text-2xl font-bold text-red-500 mb-4">Unidad no encontrada</h1>
+        <p className="text-slate-600 mb-6">No tienes una casa asignada. Contacta a la administración.</p>
         <button onClick={() => router.push('/login')} className="bg-[#1E3A5F] text-white px-6 py-2 rounded-lg">Volver al Login</button>
       </div>
     </div>
