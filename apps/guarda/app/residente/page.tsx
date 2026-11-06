@@ -1,6 +1,6 @@
 'use client';
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
@@ -38,49 +38,51 @@ export default function ResidentePage() {
   // Estados para Muro Social
   const [comunicados, setComunicados] = useState<any[]>([]);
 
-  useEffect(() => {
-    async function cargarDatos() {
-      setLoading(true);
+  // 🔥 FUNCIÓN DE CARGA DE DATOS (useCallback para poder llamarla al cambiar de pestaña)
+  const cargarDatos = useCallback(async () => {
+    setLoading(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/login'); return; }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('*, units(*, towers(*))')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile && profile.units) {
+      setMiUnidad(profile.units);
+      setNombreResidente(profile.full_name);
+
+      const { data: packs } = await supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
+      const { data: vis } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
+      const { data: visIn } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+
+      const { data: areasData } = await supabase.from('areas_comunes').select('*');
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/login'); return; }
+      const hoy = new Date().toISOString().split('T')[0];
+      const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).gte('date', hoy).order('date', { ascending: true });
 
-      // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
-      const { data: profile } = await supabase
-  .from('users')
-  .select('*, units(*, towers(*))')
-  .eq('id', user.id)
-  .maybeSingle(); // <-- CAMBIO CLAVE
+      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false }).limit(3);
+      const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
-      if (profile && profile.units) {
-        setMiUnidad(profile.units);
-        setNombreResidente(profile.full_name);
-
-        const { data: packs } = await supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
-        const { data: vis } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
-        const { data: visIn } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
-
-        const { data: areasData } = await supabase.from('areas_comunes').select('*');
-        
-        const hoy = new Date().toISOString().split('T')[0];
-        const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).gte('date', hoy).order('date', { ascending: true });
-
-        const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false }).limit(3);
-        const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
-
-        if (packs) setPaquetes(packs);
-        if (vis) setMisVisitas(vis);
-        if (visIn) setVisitasIngresadas(visIn);
-        if (areasData) setAreas(areasData);
-        if (reservasData) setMisReservas(reservasData);
-        if (pqrsData) setMisPqrs(pqrsData);
-        if (commData) setComunicados(commData);
-      }
-      
-      setLoading(false);
+      if (packs) setPaquetes(packs);
+      if (vis) setMisVisitas(vis);
+      if (visIn) setVisitasIngresadas(visIn);
+      if (areasData) setAreas(areasData);
+      if (reservasData) setMisReservas(reservasData);
+      if (pqrsData) setMisPqrs(pqrsData);
+      if (commData) setComunicados(commData);
     }
-    cargarDatos();
+    
+    setLoading(false);
   }, [router]);
+
+  // 🔥 EFECTO: Cargar datos al inicio y cada vez que cambia la pestaña
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos, tab]);
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
@@ -125,9 +127,7 @@ export default function ResidentePage() {
     else {
       alert('✅ Reserva solicitada.');
       setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
-      const hoy = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).gte('date', hoy).order('date', { ascending: true });
-      if (data) setMisReservas(data);
+      cargarDatos(); // Recargar datos
     }
     setEnviandoReserva(false);
   }
@@ -143,8 +143,7 @@ export default function ResidentePage() {
     else {
       alert('✅ PQRS enviada.');
       setAsuntoPQRS(''); setDescPQRS('');
-      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false }).limit(3);
-      if (pqrsData) setMisPqrs(pqrsData);
+      cargarDatos(); // Recargar datos
     }
     setEnviandoPQRS(false);
   }
@@ -243,7 +242,7 @@ export default function ResidentePage() {
                             setNombreVisita(visitorData?.full_name || ''); 
                             setDocVisita(visitorData?.doc_number || ''); 
                           }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
-                          <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
+                          <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); cargarDatos(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
                         </div>
                       </div>
                     );
