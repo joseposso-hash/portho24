@@ -27,7 +27,7 @@ export default function HistorialPage() {
 
     let qPacks = supabase.from('packages').select('*, units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     let qVisits = supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
-    let qCars = supabase.from('parking_sessions').select('*, vehicles(plate)').order('created_at', { ascending: false }).limit(100);
+    let qCars = supabase.from('parking_sessions').select('*, vehicles(plate), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
 
     if (inicioDia && finDia) {
       qPacks = qPacks.gte('created_at', inicioDia).lte('created_at', finDia);
@@ -55,24 +55,28 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // Función para extraer datos limpios de las notas del vehículo
+  // FUNCIÓN CORREGIDA PARA EXTRAER DATOS DEL VEHÍCULO
   const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    if (notes.includes('Visita:')) {
-      // Si es una visita escaneada, las notas dicen: "Visita: Nombre - Destino: ..."
+    // 1. Intentar extraer el Conductor (funciona para manuales y visitas)
+    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+    if (matchCond) {
+      conductor = matchCond[1].trim();
+    } else if (notes.includes('Visita:')) {
+      // Si no hay "Conductor:", pero dice "Visita:", extraemos el nombre de ahí
       const matchVisita = notes.match(/Visita:\s*([^-]+)/i);
       if (matchVisita) conductor = matchVisita[1].trim();
-      const matchDest = notes.match(/Destino:\s*(.+)/i);
-      if (matchDest) destino = matchDest[1].trim();
-    } else {
-      // Si es manual, las notas dicen: "Conductor: Nombre - Doc: ... - Destino: ..."
-      const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
-      if (matchCond) conductor = matchCond[1].trim();
-      const matchDest = notes.match(/Destino:\s*([^-]+)/i);
-      if (matchDest) destino = matchDest[1].trim();
+    }
+
+    // 2. Intentar extraer el Destino
+    const matchDest = notes.match(/Destino:\s*([^-]+)/i);
+    if (matchDest) {
+      destino = matchDest[1].trim();
+    } else if (c.units) {
+      destino = `${(c.units as any)?.towers?.name} - ${(c.units as any)?.code}`;
     }
 
     return { conductor, destino };
