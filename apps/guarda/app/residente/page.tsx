@@ -55,39 +55,32 @@ export default function ResidentePage() {
         setMiUnidad(profile.units);
         setNombreResidente(profile.full_name);
 
-        // 1. Paquetes
         const { data: packs } = await supabase
           .from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
 
-        // 2. Visitas pendientes
         const { data: vis } = await supabase
           .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
 
-        // 3. Visitas ingresadas (últimas 5)
         const { data: visIn } = await supabase
           .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
 
-        // 4. Áreas comunes
         const { data: areasData } = await supabase.from('areas_comunes').select('*');
-
-        // 5. Reservas (SOLO DE HOY EN ADELANTE)
+        
         const hoy = new Date().toISOString().split('T')[0];
         const { data: reservasData } = await supabase
           .from('reservas')
           .select('*, areas_comunes(name, icon)')
           .eq('unit_id', profile.units.id)
-          .gte('date', hoy) // <-- FILTRO: Solo futuras o de hoy
+          .gte('date', hoy)
           .order('date', { ascending: true });
 
-        // 6. PQRS (SOLO LAS 3 MÁS RECIENTES)
         const { data: pqrsData } = await supabase
           .from('pqrs')
           .select('*')
           .eq('unit_id', profile.units.id)
           .order('created_at', { ascending: false })
-          .limit(3); // <-- FILTRO: Solo las 3 últimas
+          .limit(3);
 
-        // 7. Comunicados
         const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
         if (packs) setPaquetes(packs);
@@ -108,15 +101,28 @@ export default function ResidentePage() {
     e.preventDefault();
     if (!nombreVisita || !docVisita || !miUnidad) return;
     setGenerando(true);
-    const { data: visitor, error: errVis } = await supabase.from('visitors').insert({ tenant_id: miUnidad.towers.tenant_id, full_name: nombreVisita, doc_number: docVisita }).select().single();
+
+    const { data: visitor, error: errVis } = await supabase
+      .from('visitors')
+      .insert({ tenant_id: miUnidad.towers.tenant_id, full_name: nombreVisita, doc_number: docVisita })
+      .select().single();
+
     if (errVis) { alert(errVis.message); setGenerando(false); return; }
-    
-    const { data: visita, error: errVisita } = await supabase.from('visits').insert({
-      tenant_id: miUnidad.towers.tenant_id, visitor_id: visitor.id, host_user_id: (await supabase.auth.getUser()).data.user?.id,
-      unit_id: miUnidad.id, status: 'authorized', expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    }).select().single();
-    
+
+    const { data: visita, error: errVisita } = await supabase
+      .from('visits')
+      .insert({
+        tenant_id: miUnidad.towers.tenant_id,
+        visitor_id: visitor.id,
+        host_user_id: (await supabase.auth.getUser()).data.user?.id,
+        unit_id: miUnidad.id,
+        status: 'authorized',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      })
+      .select().single();
+
     if (errVisita) { alert(errVisita.message); setGenerando(false); return; }
+
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
     setGenerando(false);
@@ -126,10 +132,13 @@ export default function ResidentePage() {
     e.preventDefault();
     if (!miUnidad || !reservaForm.areaId || !reservaForm.date || !reservaForm.startTime) return;
     setEnviandoReserva(true);
+
     const { error } = await supabase.from('reservas').insert({
       tenant_id: miUnidad.towers.tenant_id, area_id: reservaForm.areaId, unit_id: miUnidad.id,
-      date: reservaForm.date, start_time: reservaForm.startTime, end_time: reservaForm.endTime, notes: reservaForm.notes, status: 'pending'
+      date: reservaForm.date, start_time: reservaForm.startTime, end_time: reservaForm.endTime,
+      notes: reservaForm.notes, status: 'pending'
     });
+
     if (error) { alert('Error al reservar: ' + error.message); } 
     else {
       alert('✅ Reserva solicitada.');
@@ -145,9 +154,12 @@ export default function ResidentePage() {
     e.preventDefault();
     if (!miUnidad) return;
     setEnviandoPQRS(true);
+
     const { error } = await supabase.from('pqrs').insert({
-      tenant_id: miUnidad.towers.tenant_id, unit_id: miUnidad.id, type: tipoPQRS, subject: asuntoPQRS, description: descPQRS, status: 'pending'
+      tenant_id: miUnidad.towers.tenant_id, unit_id: miUnidad.id, type: tipoPQRS,
+      subject: asuntoPQRS, description: descPQRS, status: 'pending'
     });
+
     if (error) { alert('Error al enviar: ' + error.message); } 
     else {
       alert('✅ PQRS enviada.');
@@ -186,7 +198,6 @@ export default function ResidentePage() {
             <button onClick={() => router.push('/login')} className="bg-white/10 px-3 py-1.5 rounded-lg text-xs hover:bg-white/20">Salir</button>
           </div>
           
-          {/* PESTAÑAS ORIGINALES */}
           <div className="flex gap-1 bg-white/10 p-1 rounded-xl overflow-x-auto">
             <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📦 Paquetes</button>
             <button onClick={() => setTab('visitas')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>👤 Visitas</button>
@@ -224,23 +235,35 @@ export default function ResidentePage() {
               {visitasIngresadas.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-emerald-700 mb-2">✅ Invitados que ya ingresaron:</h3>
-                  {visitasIngresadas.map(v => (
-                    <div key={v.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2 flex justify-between items-center">
-                      <div><p className="text-sm font-semibold text-emerald-900">{(Array.isArray(v.visitors) ? v.visitors[0] : v.visitors)?.full_name}</p><p className="text-xs text-emerald-600">Ingresó: {new Date(v.check_in_at).toLocaleTimeString('es-CO')}</p></div>
-                    </div>
-                  ))}
+                  {visitasIngresadas.map(v => {
+                    const visitorData = Array.isArray(v.visitors) ? v.visitors[0] : v.visitors;
+                    return (
+                      <div key={v.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2 flex justify-between items-center">
+                        <div><p className="text-sm font-semibold text-emerald-900">{visitorData?.full_name}</p><p className="text-xs text-emerald-600">Ingresó: {new Date(v.check_in_at).toLocaleTimeString('es-CO')}</p></div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
               {misVisitas.length > 0 && !qrGenerado && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-700 mb-2">Tus visitas pendientes:</h3>
                   {misVisitas.map(v => {
+                    // CORRECCIÓN: Extraer datos del visitante de forma segura
                     const visitorData = Array.isArray(v.visitors) ? v.visitors[0] : v.visitors;
                     return (
                       <div key={v.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center">
-                        <div><p className="text-sm font-semibold text-slate-800">{visitorData?.full_name || 'Sin nombre'}</p><p className="text-xs text-slate-500">{visitorData?.doc_number || 'Sin doc'}</p></div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{visitorData?.full_name || 'Visitante sin nombre'}</p>
+                          <p className="text-xs text-slate-500">{visitorData?.doc_number || 'Sin documento'}</p>
+                        </div>
                         <div className="flex gap-2">
-                          <button onClick={() => { setQrGenerado(v.id); setNombreVisita(visitorData?.full_name || ''); setDocVisita(visitorData?.doc_number || ''); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
+                          <button onClick={() => { 
+                            setQrGenerado(v.id); 
+                            setNombreVisita(visitorData?.full_name || ''); 
+                            setDocVisita(visitorData?.doc_number || ''); 
+                          }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
                           <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
                         </div>
                       </div>
@@ -248,6 +271,7 @@ export default function ResidentePage() {
                   })}
                 </div>
               )}
+
               {!qrGenerado ? (
                 <form onSubmit={generarQR} className="space-y-4">
                   <h2 className="text-lg font-bold text-slate-800 mb-4">Pre-autorizar Visita</h2>

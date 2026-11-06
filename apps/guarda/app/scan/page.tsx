@@ -158,7 +158,7 @@ export default function ScanPage() {
             status: 'active',
             check_in_at: now,
             created_at: now,
-            notes: `Visita: ${(visitaEncontrada.visitors as any).full_name} - Destino: ${(visitaEncontrada.units as any).towers.name} - ${(visitaEncontrada.units as any).code}`,
+            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Doc: ${(visitaEncontrada.visitors as any).doc_number} - Destino: ${(visitaEncontrada.units as any).towers.name} - ${(visitaEncontrada.units as any).code}`,
             photo_url: urlVeh
           });
 
