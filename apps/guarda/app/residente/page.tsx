@@ -45,11 +45,12 @@ export default function ResidentePage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
 
+    // 🔥 CORRECCIÓN: Usamos .maybeSingle() para evitar el error 406
     const { data: profile } = await supabase
-  .from('users')
-  .select('*, units(*, towers(*, tenants(*)))')
-  .eq('id', user.id)
-  .maybeSingle();
+      .from('users')
+      .select('*, units(*, towers(*, tenants(*)))')
+      .eq('id', user.id)
+      .maybeSingle();
 
     if (profile && profile.units) {
       setMiUnidad(profile.units);
@@ -126,7 +127,6 @@ export default function ResidentePage() {
     else {
       alert('✅ Reserva solicitada.');
       setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
-      // Recargar solo las reservas, no todo
       const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true });
       if (data) setMisReservas(data);
     }
@@ -144,7 +144,6 @@ export default function ResidentePage() {
     else {
       alert('✅ PQRS enviada.');
       setAsuntoPQRS(''); setDescPQRS('');
-      // Recargar solo las PQRS
       const { data } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false }).limit(3);
       if (data) setMisPqrs(data);
     }
@@ -168,12 +167,11 @@ export default function ResidentePage() {
       <div className="w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col">
         
         <header className="bg-[#1E3A5F] text-white p-6 rounded-b-3xl shadow-md">
-                    <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 bg-white/20 rounded-full flex items-center justify-center text-xl">🏠</div>
               <div>
                 <p className="text-sm text-blue-200">Hola,</p>
-                {/* 🔥 CORRECCIÓN: Quitamos el nombre largo y dejamos solo un saludo genérico o el nombre corto */}
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">{miUnidad.towers.tenants.name} - Apto {miUnidad.code}</p>
               </div>
