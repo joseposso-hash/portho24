@@ -136,36 +136,21 @@ export default function ScanPage() {
         // Buscar o crear vehículo
         let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
         
-        if (!veh) {
-          const { data: newVeh, error: errNewVeh } = await supabase.from('vehicles').insert({ 
-            tenant_id: tenantId, 
-            plate: placaVehiculo.toUpperCase(), 
-            type: tipoVehiculo 
-          }).select().single();
-          
-          if (errNewVeh) throw new Error("Error creando vehículo: " + errNewVeh.message);
-          veh = newVeh;
-        }
-
-        // Crear sesión de parqueadero
-        if (veh) {
-          const now = new Date().toISOString();
-          const { error: sessionError } = await supabase.from('parking_sessions').insert({
+                if (veh) {
+          const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
             visit_id: visitaEncontrada.id,
             unit_id: (visitaEncontrada.units as any).id,
             status: 'active',
-            check_in_at: now,
-            created_at: now,
-            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Doc: ${(visitaEncontrada.visitors as any).doc_number} - Destino: ${(visitaEncontrada.units as any).towers.name} - ${(visitaEncontrada.units as any).code}`,
+            check_in_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Usamos .code (la casa) en lugar de .name (el conjunto)
+            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: ${(visitaEncontrada.units as any).code}`,
             photo_url: urlVeh
           });
 
-          if (sessionError) {
-            console.error("Error detallado de parking_sessions:", sessionError);
-            throw new Error("Error en parqueadero: " + sessionError.message);
-          }
+          if (errSession) throw errSession;
         }
       }
 
