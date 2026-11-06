@@ -38,7 +38,7 @@ export default function ResidentePage() {
   // Estados para Muro Social
   const [comunicados, setComunicados] = useState<any[]>([]);
 
-  // 🔥 FUNCIÓN DE CARGA DE DATOS (useCallback para poder llamarla al cambiar de pestaña)
+  // 🔥 FUNCIÓN DE CARGA ÚNICA
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     
@@ -55,34 +55,33 @@ export default function ResidentePage() {
       setMiUnidad(profile.units);
       setNombreResidente(profile.full_name);
 
-      const { data: packs } = await supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
-      const { data: vis } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
-      const { data: visIn } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+      // Hacemos las consultas en paralelo (mucho más rápido)
+      const [packs, vis, visIn, areasData, reservasData, pqrsData, commData] = await Promise.all([
+        supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false }),
+        supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false }),
+        supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5),
+        supabase.from('areas_comunes').select('*'),
+        supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true }),
+        supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false }).limit(3),
+        supabase.from('comunicados').select('*').order('created_at', { ascending: false })
+      ]);
 
-      const { data: areasData } = await supabase.from('areas_comunes').select('*');
-      
-      const hoy = new Date().toISOString().split('T')[0];
-      const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).gte('date', hoy).order('date', { ascending: true });
-
-      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false }).limit(3);
-      const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
-
-      if (packs) setPaquetes(packs);
-      if (vis) setMisVisitas(vis);
-      if (visIn) setVisitasIngresadas(visIn);
-      if (areasData) setAreas(areasData);
-      if (reservasData) setMisReservas(reservasData);
-      if (pqrsData) setMisPqrs(pqrsData);
-      if (commData) setComunicados(commData);
+      if (packs.data) setPaquetes(packs.data);
+      if (vis.data) setMisVisitas(vis.data);
+      if (visIn.data) setVisitasIngresadas(visIn.data);
+      if (areasData.data) setAreas(areasData.data);
+      if (reservasData.data) setMisReservas(reservasData.data);
+      if (pqrsData.data) setMisPqrs(pqrsData.data);
+      if (commData.data) setComunicados(commData.data);
     }
     
     setLoading(false);
   }, [router]);
 
-  // 🔥 EFECTO: Cargar datos al inicio y cada vez que cambia la pestaña
+  // 🔥 EFECTO: Cargar datos SOLO al inicio
   useEffect(() => {
     cargarDatos();
-  }, [cargarDatos, tab]);
+  }, [cargarDatos]);
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
@@ -127,7 +126,9 @@ export default function ResidentePage() {
     else {
       alert('✅ Reserva solicitada.');
       setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
-      cargarDatos(); // Recargar datos
+      // Recargar solo las reservas, no todo
+      const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true });
+      if (data) setMisReservas(data);
     }
     setEnviandoReserva(false);
   }
@@ -143,7 +144,9 @@ export default function ResidentePage() {
     else {
       alert('✅ PQRS enviada.');
       setAsuntoPQRS(''); setDescPQRS('');
-      cargarDatos(); // Recargar datos
+      // Recargar solo las PQRS
+      const { data } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false }).limit(3);
+      if (data) setMisPqrs(data);
     }
     setEnviandoPQRS(false);
   }
