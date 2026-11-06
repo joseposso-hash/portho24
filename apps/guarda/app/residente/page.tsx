@@ -20,6 +20,7 @@ export default function ResidentePage() {
   const [qrGenerado, setQrGenerado] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
   const [misVisitas, setMisVisitas] = useState<any[]>([]);
+  const [visitasIngresadas, setVisitasIngresadas] = useState<any[]>([]); // <-- NUEVO
 
   // Estados para Reservas
   const [areas, setAreas] = useState<any[]>([]);
@@ -41,14 +42,9 @@ export default function ResidentePage() {
     async function cargarDatos() {
       setLoading(true);
       
-      // 1. Obtener el usuario logueado
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
+      if (!user) { router.push('/login'); return; }
 
-      // 2. Buscar su perfil y su unidad
       const { data: profile } = await supabase
         .from('users')
         .select('*, units(*, towers(*))')
@@ -59,45 +55,31 @@ export default function ResidentePage() {
         setMiUnidad(profile.units);
         setNombreResidente(profile.full_name);
 
-        // 3. Cargar paquetes de SU unidad
+        // Cargar paquetes pendientes
         const { data: packs } = await supabase
-          .from('packages')
-          .select('*')
-          .eq('recipient_unit_id', profile.units.id)
-          .eq('status', 'received')
-          .order('created_at', { ascending: false });
+          .from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
 
-        // 4. Cargar visitas de SU unidad
+        // Cargar visitas PENDIENTES (authorized)
         const { data: vis } = await supabase
-          .from('visits')
-          .select('*, visitors(full_name, doc_number)')
-          .eq('unit_id', profile.units.id)
-          .eq('status', 'authorized')
-          .order('created_at', { ascending: false });
+          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
 
-        // 5. Cargar áreas y reservas
+        // Cargar visitas INGRESADAS (checked_in)
+        const { data: visIn } = await supabase
+          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+
+        // Cargar áreas y reservas
         const { data: areasData } = await supabase.from('areas_comunes').select('*');
-        const { data: reservasData } = await supabase
-          .from('reservas')
-          .select('*, areas_comunes(name, icon)')
-          .eq('unit_id', profile.units.id)
-          .order('date', { ascending: true });
+        const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).order('date', { ascending: true });
 
-        // 6. Cargar PQRS
-        const { data: pqrsData } = await supabase
-          .from('pqrs')
-          .select('*')
-          .eq('unit_id', profile.units.id)
-          .order('created_at', { ascending: false });
+        // Cargar PQRS
+        const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false });
 
-        // 7. Cargar comunicados
-        const { data: commData } = await supabase
-          .from('comunicados')
-          .select('*')
-          .order('created_at', { ascending: false });
+        // Cargar comunicados
+        const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
         if (packs) setPaquetes(packs);
         if (vis) setMisVisitas(vis);
+        if (visIn) setVisitasIngresadas(visIn); // <-- GUARDAMOS LAS INGRESADAS
         if (areasData) setAreas(areasData);
         if (reservasData) setMisReservas(reservasData);
         if (pqrsData) setMisPqrs(pqrsData);
@@ -116,11 +98,7 @@ export default function ResidentePage() {
 
     const { data: visitor, error: errVis } = await supabase
       .from('visitors')
-      .insert({
-        tenant_id: miUnidad.towers.tenant_id,
-        full_name: nombreVisita,
-        doc_number: docVisita
-      })
+      .insert({ tenant_id: miUnidad.towers.tenant_id, full_name: nombreVisita, doc_number: docVisita })
       .select().single();
 
     if (errVis) { alert(errVis.message); setGenerando(false); return; }
@@ -150,20 +128,14 @@ export default function ResidentePage() {
     setEnviandoReserva(true);
 
     const { error } = await supabase.from('reservas').insert({
-      tenant_id: miUnidad.towers.tenant_id,
-      area_id: reservaForm.areaId,
-      unit_id: miUnidad.id,
-      date: reservaForm.date,
-      start_time: reservaForm.startTime,
-      end_time: reservaForm.endTime,
-      notes: reservaForm.notes,
-      status: 'pending'
+      tenant_id: miUnidad.towers.tenant_id, area_id: reservaForm.areaId, unit_id: miUnidad.id,
+      date: reservaForm.date, start_time: reservaForm.startTime, end_time: reservaForm.endTime,
+      notes: reservaForm.notes, status: 'pending'
     });
 
-    if (error) {
-      alert('Error al reservar: ' + error.message);
-    } else {
-      alert('✅ Reserva solicitada. La administración la revisará pronto.');
+    if (error) { alert('Error al reservar: ' + error.message); } 
+    else {
+      alert('✅ Reserva solicitada.');
       setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
       const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).order('date', { ascending: true });
       if (data) setMisReservas(data);
@@ -177,21 +149,14 @@ export default function ResidentePage() {
     setEnviandoPQRS(true);
 
     const { error } = await supabase.from('pqrs').insert({
-      tenant_id: miUnidad.towers.tenant_id,
-      unit_id: miUnidad.id,
-      type: tipoPQRS,
-      subject: asuntoPQRS,
-      description: descPQRS,
-      status: 'pending'
+      tenant_id: miUnidad.towers.tenant_id, unit_id: miUnidad.id, type: tipoPQRS,
+      subject: asuntoPQRS, description: descPQRS, status: 'pending'
     });
 
-    if (error) {
-      alert('Error al enviar: ' + error.message);
-    } else {
-      alert('✅ PQRS enviada correctamente.');
-      setAsuntoPQRS('');
-      setDescPQRS('');
-      
+    if (error) { alert('Error al enviar: ' + error.message); } 
+    else {
+      alert('✅ PQRS enviada.');
+      setAsuntoPQRS(''); setDescPQRS('');
       const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false });
       if (pqrsData) setMisPqrs(pqrsData);
     }
@@ -204,7 +169,7 @@ export default function ResidentePage() {
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
         <h1 className="text-2xl font-bold text-red-500 mb-4">Unidad no encontrada</h1>
-        <p className="text-slate-600 mb-6">No tienes un apartamento asignado. Contacta a la administración.</p>
+        <p className="text-slate-600 mb-6">No tienes una casa asignada. Contacta a la administración.</p>
         <button onClick={() => router.push('/login')} className="bg-[#1E3A5F] text-white px-6 py-2 rounded-lg">Volver al Login</button>
       </div>
     </div>
@@ -265,6 +230,22 @@ export default function ResidentePage() {
 
           {tab === 'visitas' && (
             <div>
+              {/* VISITAS INGRESADAS (NUEVO) */}
+              {visitasIngresadas.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-emerald-700 mb-2">✅ Invitados que ya ingresaron:</h3>
+                  {visitasIngresadas.map(v => (
+                    <div key={v.id} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2 flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-900">{(v.visitors as any)?.full_name}</p>
+                        <p className="text-xs text-emerald-600">Ingresó: {new Date(v.check_in_at).toLocaleTimeString('es-CO')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* VISITAS PENDIENTES */}
               {misVisitas.length > 0 && !qrGenerado && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-700 mb-2">Tus visitas pendientes:</h3>
@@ -275,7 +256,12 @@ export default function ResidentePage() {
                         <p className="text-xs text-slate-500">{(v.visitors as any)?.doc_number}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { setQrGenerado(v.id); setNombreVisita((v.visitors as any)?.full_name || ''); setDocVisita((v.visitors as any)?.doc_number || ''); }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
+                        {/* CORRECCIÓN: Pasamos el nombre y doc */}
+                        <button onClick={() => { 
+                          setQrGenerado(v.id); 
+                          setNombreVisita((v.visitors as any)?.full_name || ''); 
+                          setDocVisita((v.visitors as any)?.doc_number || ''); 
+                        }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-medium hover:bg-blue-200">Ver QR</button>
                         <button onClick={async () => { if(confirm('¿Cancelar esta visita?')) { await supabase.from('visits').update({ status: 'denied' }).eq('id', v.id); window.location.reload(); } }} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-medium hover:bg-red-200">Cancelar</button>
                       </div>
                     </div>
@@ -320,7 +306,6 @@ export default function ResidentePage() {
           {tab === 'reservas' && (
             <div className="space-y-6">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Reservar Zona Común</h2>
-              
               <form onSubmit={crearReserva} className="space-y-4 bg-white p-4 rounded-xl border border-slate-200">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Área Común</span>
@@ -329,12 +314,10 @@ export default function ResidentePage() {
                     {areas.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
                   </select>
                 </label>
-                
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Fecha</span>
                   <input type="date" value={reservaForm.date} onChange={(e) => setReservaForm({...reservaForm, date: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
                 </label>
-
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700">Hora Inicio</span>
@@ -345,7 +328,6 @@ export default function ResidentePage() {
                     <input type="time" value={reservaForm.endTime} onChange={(e) => setReservaForm({...reservaForm, endTime: e.target.value})} required className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" />
                   </label>
                 </div>
-
                 <button type="submit" disabled={enviandoReserva} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">
                   {enviandoReserva ? 'Solicitando...' : 'Solicitar Reserva'}
                 </button>
@@ -353,28 +335,26 @@ export default function ResidentePage() {
 
               <div className="mt-8">
                 <h3 className="text-sm font-bold text-slate-700 mb-3">Mis Reservas</h3>
-                {misReservas.length === 0 ? (
-                  <p className="text-sm text-slate-400">No tienes reservas.</p>
-                ) : (
-                  misReservas.map(r => (
-                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
-                      <div className="flex justify-between items-start mb-1">
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">{(r.areas_comunes as any)?.icon} {(r.areas_comunes as any)?.name}</p>
-                          <p className="text-xs text-slate-500">{r.date} · {r.start_time} - {r.end_time}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.status === 'pending' ? 'bg-amber-100 text-amber-800' : r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                          {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
-                        </span>
+                {misReservas.length === 0 ? <p className="text-sm text-slate-400">No tienes reservas.</p> : 
+                 misReservas.map(r => (
+                  <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{(r.areas_comunes as any)?.icon} {(r.areas_comunes as any)?.name}</p>
+                        <p className="text-xs text-slate-500">{r.date} · {r.start_time} - {r.end_time}</p>
                       </div>
-                      {r.admin_notes && (
-                        <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
-                          <strong>Motivo:</strong> {r.admin_notes}
-                        </div>
-                      )}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.status === 'pending' ? 'bg-amber-100 text-amber-800' : r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                      </span>
                     </div>
-                  ))
-                )}
+                    {r.admin_notes && (
+                      <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
+                        <strong>Motivo:</strong> {r.admin_notes}
+                      </div>
+                    )}
+                  </div>
+                ))
+                }
               </div>
             </div>
           )}
