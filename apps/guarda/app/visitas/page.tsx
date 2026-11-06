@@ -101,17 +101,17 @@ export default function VisitasPage() {
           veh = newVeh;
         }
 
-        if (veh) {
-          // 🔥 AQUÍ APLICAMOS EL MISMO FORMATO QUE EL CONTROL MANUAL
+                if (veh) {
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id, 
+            visit_id: visita.id,
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`, // Formato idéntico al manual
+            // ⚠️ ESTA ES LA LÍNEA QUE DEBE SER IDÉNTICA AL MÓDULO DE VEHÍCULOS:
+            notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });
 
