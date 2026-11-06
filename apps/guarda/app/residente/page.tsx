@@ -55,12 +55,39 @@ export default function ResidentePage() {
         setMiUnidad(profile.units);
         setNombreResidente(profile.full_name);
 
-        const { data: packs } = await supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
-        const { data: vis } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
-        const { data: visIn } = await supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+        // 1. Paquetes
+        const { data: packs } = await supabase
+          .from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false });
+
+        // 2. Visitas pendientes
+        const { data: vis } = await supabase
+          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false });
+
+        // 3. Visitas ingresadas (últimas 5)
+        const { data: visIn } = await supabase
+          .from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5);
+
+        // 4. Áreas comunes
         const { data: areasData } = await supabase.from('areas_comunes').select('*');
-        const { data: reservasData } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', profile.units.id).order('date', { ascending: true });
-        const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', profile.units.id).order('created_at', { ascending: false });
+
+        // 5. Reservas (SOLO DE HOY EN ADELANTE)
+        const hoy = new Date().toISOString().split('T')[0];
+        const { data: reservasData } = await supabase
+          .from('reservas')
+          .select('*, areas_comunes(name, icon)')
+          .eq('unit_id', profile.units.id)
+          .gte('date', hoy) // <-- FILTRO: Solo futuras o de hoy
+          .order('date', { ascending: true });
+
+        // 6. PQRS (SOLO LAS 3 MÁS RECIENTES)
+        const { data: pqrsData } = await supabase
+          .from('pqrs')
+          .select('*')
+          .eq('unit_id', profile.units.id)
+          .order('created_at', { ascending: false })
+          .limit(3); // <-- FILTRO: Solo las 3 últimas
+
+        // 7. Comunicados
         const { data: commData } = await supabase.from('comunicados').select('*').order('created_at', { ascending: false });
 
         if (packs) setPaquetes(packs);
@@ -83,10 +110,12 @@ export default function ResidentePage() {
     setGenerando(true);
     const { data: visitor, error: errVis } = await supabase.from('visitors').insert({ tenant_id: miUnidad.towers.tenant_id, full_name: nombreVisita, doc_number: docVisita }).select().single();
     if (errVis) { alert(errVis.message); setGenerando(false); return; }
+    
     const { data: visita, error: errVisita } = await supabase.from('visits').insert({
       tenant_id: miUnidad.towers.tenant_id, visitor_id: visitor.id, host_user_id: (await supabase.auth.getUser()).data.user?.id,
       unit_id: miUnidad.id, status: 'authorized', expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     }).select().single();
+    
     if (errVisita) { alert(errVisita.message); setGenerando(false); return; }
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
@@ -105,7 +134,8 @@ export default function ResidentePage() {
     else {
       alert('✅ Reserva solicitada.');
       setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
-      const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).order('date', { ascending: true });
+      const hoy = new Date().toISOString().split('T')[0];
+      const { data } = await supabase.from('reservas').select('*, areas_comunes(name, icon)').eq('unit_id', miUnidad.id).gte('date', hoy).order('date', { ascending: true });
       if (data) setMisReservas(data);
     }
     setEnviandoReserva(false);
@@ -122,13 +152,14 @@ export default function ResidentePage() {
     else {
       alert('✅ PQRS enviada.');
       setAsuntoPQRS(''); setDescPQRS('');
-      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false });
+      const { data: pqrsData } = await supabase.from('pqrs').select('*').eq('unit_id', miUnidad.id).order('created_at', { ascending: false }).limit(3);
       if (pqrsData) setMisPqrs(pqrsData);
     }
     setEnviandoPQRS(false);
   }
 
   if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50 font-medium text-slate-500">Cargando App Residente...</div>;
+  
   if (!miUnidad) return (
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
@@ -275,7 +306,7 @@ export default function ResidentePage() {
                 <button type="submit" disabled={enviandoPQRS} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white mt-2 disabled:opacity-50">{enviandoPQRS ? 'Enviando...' : 'Enviar PQRS'}</button>
               </form>
               <div className="mt-8">
-                <h3 className="text-sm font-bold text-slate-700 mb-3">Tus solicitudes anteriores:</h3>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Tus últimas solicitudes:</h3>
                 {misPqrs.length === 0 ? <p className="text-sm text-slate-400">No has enviado ninguna solicitud.</p> : 
                  misPqrs.map(p => (
                   <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-4 mb-3 shadow-sm">
