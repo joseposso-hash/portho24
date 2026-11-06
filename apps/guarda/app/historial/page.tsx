@@ -27,7 +27,11 @@ export default function HistorialPage() {
 
     let qPacks = supabase.from('packages').select('*, units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     let qVisits = supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
-    let qCars = supabase.from('parking_sessions').select('*, vehicles(plate), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
+    // AQUI AGREGAMOS EL JOIN CON VISITS Y VISITORS
+    let qCars = supabase.from('parking_sessions')
+      .select('*, vehicles(plate), units(code, towers(name)), visits(visitors(full_name))')
+      .order('created_at', { ascending: false })
+      .limit(100);
 
     if (inicioDia && finDia) {
       qPacks = qPacks.gte('created_at', inicioDia).lte('created_at', finDia);
@@ -55,24 +59,28 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  // LÓGICA DEFINITIVA: Extrae lo que está entre "Conductor:" y el siguiente "-"
-    const getDatosVehiculo = (c: any) => {
+  // NUEVA LÓGICA: Si tiene visit_id, saca el nombre de la relación. Si no, de las notas.
+  const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    // 1. Buscar el formato nuevo (Conductor: ...)
-    const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
-    if (matchCond) {
-      conductor = matchCond[1].trim();
+    // 1. Prioridad: Si es una visita, buscar en el JOIN
+    if (c.visit_id && c.visits && c.visits.visitors) {
+      const visitData = Array.isArray(c.visits) ? c.visits[0] : c.visits;
+      const visitorData = Array.isArray(visitData.visitors) ? visitData.visitors[0] : visitData.visitors;
+      if (visitorData?.full_name) {
+        conductor = visitorData.full_name;
+      }
     } 
-    // 2. Buscar el formato viejo (Visita no anunciada: ...)
-    else if (notes.includes('Visita no anunciada:')) {
-      const matchVisita = notes.match(/Visita no anunciada:\s*([^-]+)/i);
-      if (matchVisita) conductor = matchVisita[1].trim();
+    
+    // 2. Si no es visita, buscar en las notas (registro manual)
+    if (conductor === '-') {
+      const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
+      if (matchCond) conductor = matchCond[1].trim();
     }
 
-    // Buscar Destino
+    // Destino
     const matchDest = notes.match(/Destino:\s*([^-]+)/i);
     if (matchDest) {
       destino = matchDest[1].trim();
