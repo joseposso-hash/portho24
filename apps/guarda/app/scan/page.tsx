@@ -42,9 +42,9 @@ export default function ScanPage() {
             html5QrCode.stop();
             setIsScanning(false);
 
-            const { data, error } = await supabase
+                        const { data, error } = await supabase
               .from('visits')
-              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))')
+              .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))') // <-- AGREGAMOS units
               .eq('id', decodedText)
               .single();
 
@@ -136,17 +136,17 @@ export default function ScanPage() {
         // Buscar o crear vehículo
         let { data: veh } = await supabase.from('vehicles').select('*').eq('plate', placaVehiculo.toUpperCase()).eq('tenant_id', tenantId).single();
         
-                if (veh) {
+                        if (veh) {
           const { error: errSession } = await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visitaEncontrada.id,
+            visit_id: visitaEncontrada.id, 
             unit_id: (visitaEncontrada.units as any).id,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Usamos .code (la casa) en lugar de .name (el conjunto)
-            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: ${(visitaEncontrada.units as any).code}`,
+            // 🔥 CORRECCIÓN: Usamos .code (la casa) en lugar de .name (el conjunto)
+            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: Casa ${(visitaEncontrada.units as any).code}`,
             photo_url: urlVeh
           });
 

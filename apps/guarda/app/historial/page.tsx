@@ -60,22 +60,26 @@ export default function HistorialPage() {
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
-  const getDatosVehiculo = (c: any) => {
+    const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = 'Sin nombre';
     let destino = 'No especificado';
 
-    // Extraemos el conductor de las notas
+    // Extraer Conductor
     const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
     if (matchCond) conductor = matchCond[1].trim();
 
-    // Extraemos el destino de las notas
+    // Extraer Destino
     const matchDest = notes.match(/Destino:\s*([^-]+)/i);
     if (matchDest) destino = matchDest[1].trim();
+    
+    // Si por alguna razón no hay destino en las notas, usamos el de la unidad (fallback)
+    if (destino === 'No especificado' && c.units) {
+      destino = `${(c.units as any)?.towers?.name} - ${(c.units as any)?.code}`;
+    }
 
     return { conductor, destino };
   };
-
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
