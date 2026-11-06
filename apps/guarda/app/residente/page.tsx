@@ -168,12 +168,13 @@ export default function ResidentePage() {
       <div className="w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col">
         
         <header className="bg-[#1E3A5F] text-white p-6 rounded-b-3xl shadow-md">
-          <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 bg-white/20 rounded-full flex items-center justify-center text-xl">🏠</div>
               <div>
                 <p className="text-sm text-blue-200">Hola,</p>
-                <h1 className="text-lg font-bold">{nombreResidente}</h1>
+                {/* 🔥 CORRECCIÓN: Quitamos el nombre largo y dejamos solo un saludo genérico o el nombre corto */}
+                <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">{miUnidad.towers.tenants.name} - Apto {miUnidad.code}</p>
               </div>
             </div>
