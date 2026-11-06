@@ -15,24 +15,21 @@ export default function AdminReportes() {
     pqrs: 0,
   });
 
-  // Estados para guardar los datos crudos para exportar
   const [dataExport, setDataExport] = useState<any[]>([]);
 
   useEffect(() => {
     cargarReportes();
-  }, [filtroFecha]);
+  }, [filtroFecha, filtroModulo]);
 
   async function cargarReportes() {
     setLoading(true);
     
-    // 1. Obtener el tenant del usuario logueado
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
     if (!profile) return;
     const tId = profile.tenant_id;
 
-    // 2. Calcular rango de fechas
     const ahora = new Date();
     let fechaInicioCalculada = new Date();
     
@@ -45,13 +42,11 @@ export default function AdminReportes() {
     }
     const inicioISO = fechaInicioCalculada.toISOString();
 
-    // 3. Consultas a Supabase
     const { data: pData } = await supabase.from('packages').select('*').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: vData } = await supabase.from('visits').select('*, visitors(full_name)').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: cData } = await supabase.from('parking_sessions').select('*, vehicles(plate)').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: qData } = await supabase.from('pqrs').select('*').eq('tenant_id', tId).gte('created_at', inicioISO);
 
-    // 4. Cálculos
     const recaudo = cData?.filter(c => c.status === 'paid').reduce((acc, curr) => acc + (curr.amount_paid || 0), 0) || 0;
 
     setStats({
@@ -62,38 +57,37 @@ export default function AdminReportes() {
       pqrs: qData?.length || 0,
     });
 
-    // 5. Guardar datos para exportar según el módulo seleccionado
     if (filtroModulo === 'paquetes') setDataExport(pData || []);
     else if (filtroModulo === 'visitas') setDataExport(vData || []);
     else if (filtroModulo === 'vehiculos') setDataExport(cData || []);
     else if (filtroModulo === 'pqrs') setDataExport(qData || []);
-    else setDataExport([]); // Para 'todos' no mostramos exportación por ahora
+    else setDataExport([]);
 
     setLoading(false);
   }
 
-  // Función para descargar Excel (CSV)
   function descargarExcel() {
     if (dataExport.length === 0) {
       alert('No hay datos para exportar en este módulo.');
       return;
     }
 
-    let headers = [];
-    let rows = [];
+    // 🔥 CORRECCIÓN DE TIPOS: Especificamos que son arreglos de strings y arreglos de strings
+    let headers: string[] = [];
+    let rows: string[][] = [];
 
     if (filtroModulo === 'paquetes') {
       headers = ['Courier', 'Guía', 'Estado', 'Fecha Creación'];
-      rows = dataExport.map(d => [d.courier, d.tracking_number, d.status, new Date(d.created_at).toLocaleString()]);
+      rows = dataExport.map(d => [d.courier || '', d.tracking_number || '', d.status || '', new Date(d.created_at).toLocaleString()]);
     } else if (filtroModulo === 'visitas') {
       headers = ['Visitante', 'Documento', 'Estado', 'Fecha Ingreso'];
-      rows = dataExport.map(d => [d.visitors?.full_name, '', d.status, d.check_in_at ? new Date(d.check_in_at).toLocaleString() : '']);
+      rows = dataExport.map(d => [d.visitors?.full_name || '', '', d.status || '', d.check_in_at ? new Date(d.check_in_at).toLocaleString() : '']);
     } else if (filtroModulo === 'vehiculos') {
       headers = ['Placa', 'Estado', 'Cobro', 'Fecha Ingreso'];
-      rows = dataExport.map(d => [d.vehicles?.plate, d.status, d.amount_paid || 0, d.check_in_at ? new Date(d.check_in_at).toLocaleString() : '']);
+      rows = dataExport.map(d => [d.vehicles?.plate || '', d.status || '', String(d.amount_paid || 0), d.check_in_at ? new Date(d.check_in_at).toLocaleString() : '']);
     } else if (filtroModulo === 'pqrs') {
       headers = ['Tipo', 'Asunto', 'Estado', 'Fecha'];
-      rows = dataExport.map(d => [d.type, d.subject, d.status, new Date(d.created_at).toLocaleString()]);
+      rows = dataExport.map(d => [d.type || '', d.subject || '', d.status || '', new Date(d.created_at).toLocaleString()]);
     }
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -112,23 +106,20 @@ export default function AdminReportes() {
 
       <div className="p-8 max-w-6xl mx-auto">
         
-        {/* Filtros de Fecha */}
         <div className="flex gap-2 mb-6 bg-white p-2 rounded-xl shadow-sm border border-slate-100 w-fit">
           <button onClick={() => setFiltroFecha('hoy')} className={`px-6 py-2 rounded-lg text-sm font-medium transition ${filtroFecha === 'hoy' ? 'bg-[#1E3A5F] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Hoy</button>
           <button onClick={() => setFiltroFecha('semana')} className={`px-6 py-2 rounded-lg text-sm font-medium transition ${filtroFecha === 'semana' ? 'bg-[#1E3A5F] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Última Semana</button>
           <button onClick={() => setFiltroFecha('mes')} className={`px-6 py-2 rounded-lg text-sm font-medium transition ${filtroFecha === 'mes' ? 'bg-[#1E3A5F] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Último Mes</button>
         </div>
 
-        {/* Pestañas de Módulos */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          <button onClick={() => { setFiltroModulo('todos'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'todos' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>🌟 Todos</button>
-          <button onClick={() => { setFiltroModulo('paquetes'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'paquetes' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>📦 Paquetería</button>
-          <button onClick={() => { setFiltroModulo('visitas'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'visitas' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>👤 Visitas</button>
-          <button onClick={() => { setFiltroModulo('vehiculos'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'vehiculos' ? 'bg-purple-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>🚗 Vehículos</button>
-          <button onClick={() => { setFiltroModulo('pqrs'); }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'pqrs' ? 'bg-rose-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>📝 PQRS</button>
+          <button onClick={() => setFiltroModulo('todos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'todos' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>🌟 Todos</button>
+          <button onClick={() => setFiltroModulo('paquetes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'paquetes' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>📦 Paquetería</button>
+          <button onClick={() => setFiltroModulo('visitas')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'visitas' ? 'bg-blue-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>👤 Visitas</button>
+          <button onClick={() => setFiltroModulo('vehiculos')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'vehiculos' ? 'bg-purple-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>🚗 Vehículos</button>
+          <button onClick={() => setFiltroModulo('pqrs')} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroModulo === 'pqrs' ? 'bg-rose-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>📝 PQRS</button>
         </div>
 
-        {/* Tarjetas de Métricas (Filtradas según módulo) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {(filtroModulo === 'todos' || filtroModulo === 'paquetes') && (
@@ -168,13 +159,9 @@ export default function AdminReportes() {
 
         </div>
 
-        {/* Botón de Exportar */}
         <div className="mt-8 flex justify-end">
           {filtroModulo !== 'todos' && (
-            <button 
-              onClick={descargarExcel}
-              className="bg-emerald-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm"
-            >
+            <button onClick={descargarExcel} className="bg-emerald-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm">
               📥 Descargar Reporte de {filtroModulo.charAt(0).toUpperCase() + filtroModulo.slice(1)} (Excel)
             </button>
           )}
