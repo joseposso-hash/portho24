@@ -184,12 +184,13 @@ export default function ResidentePage() {
             <button onClick={() => router.push('/login')} className="bg-white/10 px-3 py-1.5 rounded-lg text-xs hover:bg-white/20">Salir</button>
           </div>
           
+          {/* PESTAÑAS MAS GRANDES Y EN NEGRITA */}
           <div className="flex gap-1 bg-white/10 p-1 rounded-xl overflow-x-auto">
-            <button onClick={() => setTab('paquetes')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📦 Paquetes</button>
-            <button onClick={() => setTab('visitas')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>👤 Visitas</button>
-            <button onClick={() => setTab('reservas')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'reservas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>🏊 Reservas</button>
-            <button onClick={() => setTab('pqrs')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📝 PQRS</button>
-            <button onClick={() => setTab('muro')} className={`flex-1 py-2 px-1 text-[10px] sm:text-[11px] font-medium rounded-lg transition whitespace-nowrap ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📢 Muro</button>
+            <button onClick={() => setTab('paquetes')} className={`flex-1 py-3 px-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${tab === 'paquetes' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📦 Paquetes</button>
+            <button onClick={() => setTab('visitas')} className={`flex-1 py-3 px-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${tab === 'visitas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>👤 Visitas</button>
+            <button onClick={() => setTab('reservas')} className={`flex-1 py-3 px-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${tab === 'reservas' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>🏊 Reservas</button>
+            <button onClick={() => setTab('pqrs')} className={`flex-1 py-3 px-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${tab === 'pqrs' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📝 PQRS</button>
+            <button onClick={() => setTab('muro')} className={`flex-1 py-3 px-2 text-xs font-bold rounded-lg transition whitespace-nowrap ${tab === 'muro' ? 'bg-white text-[#1E3A5F]' : 'text-white'}`}>📢 Muro</button>
           </div>
         </header>
 
@@ -222,7 +223,6 @@ export default function ResidentePage() {
 
           {tab === 'visitas' && (
             <div>
-              {/* VISITAS INGRESADAS */}
               {visitasIngresadas.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-emerald-700 mb-2">✅ Invitados que ya ingresaron:</h3>
@@ -237,12 +237,10 @@ export default function ResidentePage() {
                 </div>
               )}
 
-              {/* VISITAS PENDIENTES (CORREGIDO) */}
               {misVisitas.length > 0 && !qrGenerado && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-700 mb-2">Tus visitas pendientes:</h3>
                   {misVisitas.map(v => {
-                    // Extraer datos del visitante de forma segura
                     const visitorData = Array.isArray(v.visitors) ? v.visitors[0] : v.visitors;
                     return (
                       <div key={v.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-2 flex justify-between items-center">
