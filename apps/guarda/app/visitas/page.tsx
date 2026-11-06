@@ -103,15 +103,15 @@ export default function VisitasPage() {
         }
 
                 if (veh) {
-          await supabase.from('parking_sessions').insert({
+                    await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
-            visit_id: visita.id,
+            visit_id: visita.id, // <-- ESTO YA ESTÁ BIEN
             unit_id: unitId,
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // ⚠️ ESTE ES EL CAMBIO CLAVE:
+            // ⚠️ ESTA ES LA LÍNEA QUE DEBES CAMBIAR:
             notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });
