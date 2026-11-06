@@ -102,7 +102,7 @@ export default function VisitasPage() {
           veh = newVeh;
         }
 
-        if (veh) {
+                if (veh) {
           await supabase.from('parking_sessions').insert({
             tenant_id: tenantId,
             vehicle_id: veh.id,
@@ -111,7 +111,7 @@ export default function VisitasPage() {
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // CORRECCIÓN: Guardamos el nombre en el formato que espera el historial
+            // ⚠️ ESTE ES EL CAMBIO CLAVE:
             notes: `Conductor: ${nombre} - Doc: ${documento} - Destino: ${unitSearch}`,
             photo_url: urlVeh
           });

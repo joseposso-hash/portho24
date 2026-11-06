@@ -56,25 +56,23 @@ export default function HistorialPage() {
   const vehiculosFiltrados = vehiculos.filter(c => (c.vehicles as any)?.plate?.toLowerCase().includes(busqueda.toLowerCase()));
 
   // LÓGICA DEFINITIVA: Extrae lo que está entre "Conductor:" y el siguiente "-"
-  const getDatosVehiculo = (c: any) => {
-      const getDatosVehiculo = (c: any) => {
+    const getDatosVehiculo = (c: any) => {
     const notes = c.notes || '';
     let conductor = '-';
     let destino = 'No especificado';
 
-    // 1. Extraer Conductor
-    // Busca "Conductor: [nombre]" y se detiene en un guion o en "Destino"
+    // 1. Buscar el formato nuevo (Conductor: ...)
     const matchCond = notes.match(/Conductor:\s*([^-]+)/i);
     if (matchCond) {
       conductor = matchCond[1].trim();
     } 
-    // Si no encuentra "Conductor", busca "Visita no anunciada:" (por si queda algún registro viejo)
+    // 2. Buscar el formato viejo (Visita no anunciada: ...)
     else if (notes.includes('Visita no anunciada:')) {
       const matchVisita = notes.match(/Visita no anunciada:\s*([^-]+)/i);
       if (matchVisita) conductor = matchVisita[1].trim();
     }
 
-    // 2. Extraer Destino
+    // Buscar Destino
     const matchDest = notes.match(/Destino:\s*([^-]+)/i);
     if (matchDest) {
       destino = matchDest[1].trim();
