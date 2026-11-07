@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
 
@@ -10,14 +10,14 @@ async function autorizarAdministrador(request: NextRequest) {
     : null;
 
   if (!token) {
-    return { error: 'Sesión no válida.', status: 401 as const };
+    return { error: 'SesiÃ³n no vÃ¡lida.', status: 401 as const };
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    return { error: 'Configuración de Supabase incompleta.', status: 500 as const };
+    return { error: 'ConfiguraciÃ³n de Supabase incompleta.', status: 500 as const };
   }
 
   const supabaseUser = createClient(url, anonKey, {
@@ -34,7 +34,7 @@ async function autorizarAdministrador(request: NextRequest) {
     await supabaseUser.auth.getUser(token);
 
   if (authError || !authData.user) {
-    return { error: 'Sesión no válida o vencida.', status: 401 as const };
+    return { error: 'SesiÃ³n no vÃ¡lida o vencida.', status: 401 as const };
   }
 
   const { data: profile, error: profileError } = await supabaseUser
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     if (!nombre || nombre.length > 120) {
       return NextResponse.json(
-        { error: 'Ingresa un nombre válido (máximo 120 caracteres).' },
+        { error: 'Ingresa un nombre vÃ¡lido (mÃ¡ximo 120 caracteres).' },
         { status: 400 }
       );
     }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       email.length > 254
     ) {
       return NextResponse.json(
-        { error: 'Ingresa un correo electrónico válido.' },
+        { error: 'Ingresa un correo electrÃ³nico vÃ¡lido.' },
         { status: 400 }
       );
     }
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-    const redirectTo = new URL('/login', siteUrl).toString();
+    const redirectTo = new URL('/auth/confirm', siteUrl).toString();
 
     const { data: inviteData, error: inviteError } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
 
     if (inviteError || !inviteData.user) {
       return NextResponse.json(
-        { error: inviteError?.message || 'No fue posible enviar la invitación.' },
+        { error: inviteError?.message || 'No fue posible enviar la invitaciÃ³n.' },
         { status: 400 }
       );
     }
@@ -195,20 +195,20 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin.auth.admin.deleteUser(inviteData.user.id);
 
       return NextResponse.json(
-        { error: 'Se envió la invitación, pero no fue posible completar el perfil. Se intentó cancelar la cuenta. ' + updateError.message },
+        { error: 'Se enviÃ³ la invitaciÃ³n, pero no fue posible completar el perfil. Se intentÃ³ cancelar la cuenta. ' + updateError.message },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Invitación enviada correctamente.',
+      message: 'InvitaciÃ³n enviada correctamente.',
       userId: inviteData.user.id,
     });
   } catch (error) {
     console.error('Error al invitar usuario:', error);
     return NextResponse.json(
-      { error: 'Error interno al procesar la invitación.' },
+      { error: 'Error interno al procesar la invitaciÃ³n.' },
       { status: 500 }
     );
   }
@@ -231,7 +231,7 @@ export async function PATCH(request: NextRequest) {
 
     if (!userId || typeof isActive !== 'boolean') {
       return NextResponse.json(
-        { error: 'Datos de actualización incompletos.' },
+        { error: 'Datos de actualizaciÃ³n incompletos.' },
         { status: 400 }
       );
     }
@@ -312,3 +312,4 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
