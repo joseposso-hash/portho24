@@ -173,7 +173,7 @@ export default function ResidentePage() {
               <div>
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
-                <p className="text-xs text-blue-200">{miUnidad.towers.tenants.name} - Apto {miUnidad.code}</p>
+                <p className="text-xs text-blue-200">{miUnidad.towers.tenants.name} - Casa {miUnidad.code}</p>
               </div>
             </div>
             <button onClick={() => router.push('/login')} className="bg-white/10 px-3 py-1.5 rounded-lg text-xs hover:bg-white/20">Salir</button>
@@ -346,3 +346,4 @@ export default function ResidentePage() {
     </div>
   );
 }
+
