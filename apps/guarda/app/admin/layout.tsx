@@ -25,7 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       if (profile) {
         setNombreAdmin(profile.full_name || 'Administrador');
         const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
-        if (tenantData?.name) setNombreConjunto(tenantData.name);
+        if (tenantData?.name) setNombreConjunto('Pinar de la Fontana E3');
       }
     }
     cargarPerfil();
@@ -130,3 +130,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+
