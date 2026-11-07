@@ -88,35 +88,59 @@ export default function ResidentePage() {
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
+
     if (!nombreVisita || !docVisita || !miUnidad || !miTenantId) return;
+
     setGenerando(true);
 
-    const { data: visitor, error: errVis } = await supabase
-      .from('visitors')
-      .insert({ tenant_id: miTenantId, full_name: nombreVisita, doc_number: docVisita })
-      .select().single();
+    const visitorId = crypto.randomUUID();
 
-    if (errVis) { alert(errVis.message); setGenerando(false); return; }
+    const { error: errVis } = await supabase
+      .from('visitors')
+      .insert({
+        id: visitorId,
+        tenant_id: miTenantId,
+        full_name: nombreVisita,
+        doc_number: docVisita
+      });
+
+    if (errVis) {
+      alert('Error al registrar visitante: ' + errVis.message);
+      setGenerando(false);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      alert('No se encontró la sesión del residente.');
+      setGenerando(false);
+      return;
+    }
 
     const { data: visita, error: errVisita } = await supabase
       .from('visits')
       .insert({
-        tenant_id: miUnidad.towers.tenant_id,
-        visitor_id: visitor.id,
-        host_user_id: (await supabase.auth.getUser()).data.user?.id,
+        tenant_id: miTenantId,
+        visitor_id: visitorId,
+        host_user_id: user.id,
         unit_id: miUnidad.id,
         status: 'authorized',
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       })
-      .select().single();
+      .select()
+      .single();
 
-    if (errVisita) { alert(errVisita.message); setGenerando(false); return; }
+    if (errVisita) {
+      alert('Visitante registrado, pero hubo un error al crear la visita: ' + errVisita.message);
+      setGenerando(false);
+      return;
+    }
 
     setMisVisitas([visita, ...misVisitas]);
     setQrGenerado(visita.id);
     setGenerando(false);
   }
-
   async function crearReserva(e: React.FormEvent) {
     e.preventDefault();
     if (!miUnidad || !reservaForm.areaId || !reservaForm.date || !reservaForm.startTime) return;
