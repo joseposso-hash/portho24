@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ export default function ResidentePage() {
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'reservas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
+  const [miTenantId, setMiTenantId] = useState<string | null>(null);
   const [nombreResidente, setNombreResidente] = useState('');
   
   // Estados para Visitas
@@ -54,6 +55,7 @@ export default function ResidentePage() {
 
     if (profile && profile.units) {
       setMiUnidad(profile.units);
+      setMiTenantId(profile.tenant_id);
       setNombreResidente(profile.full_name);
 
       // Hacemos las consultas en paralelo (mucho más rápido)
@@ -86,12 +88,12 @@ export default function ResidentePage() {
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
-    if (!nombreVisita || !docVisita || !miUnidad) return;
+    if (!nombreVisita || !docVisita || !miUnidad || !miTenantId) return;
     setGenerando(true);
 
     const { data: visitor, error: errVis } = await supabase
       .from('visitors')
-      .insert({ tenant_id: miUnidad.towers.tenant_id, full_name: nombreVisita, doc_number: docVisita })
+      .insert({ tenant_id: miTenantId, full_name: nombreVisita, doc_number: docVisita })
       .select().single();
 
     if (errVis) { alert(errVis.message); setGenerando(false); return; }
