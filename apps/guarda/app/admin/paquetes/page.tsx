@@ -16,7 +16,7 @@ export default function AdminPaquetes() {
     setLoading(true);
     let query = supabase
       .from('packages')
-      .select('*, units(code, towers(name))')
+      .select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, units(code, towers(name))')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -71,14 +71,14 @@ export default function AdminPaquetes() {
                 <th className="px-4 py-4">Foto</th>
                 <th className="px-4 py-4">Courier / Guía</th>
                 <th className="px-4 py-4">Destino</th>
-                <th className="px-4 py-4">PIN</th>
+                
                 <th className="px-4 py-4">Recibido</th>
                 <th className="px-4 py-4">Entregado</th>
                 <th className="px-4 py-4">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={7} className="p-8 text-center">Cargando...</td></tr> : 
+              {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
                filtrados.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
@@ -89,7 +89,7 @@ export default function AdminPaquetes() {
                   <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
                     {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
                   </td>
-                  <td className="px-4 py-3 font-mono text-slate-400">••••••</td>
+                  
                   <td className="px-4 py-3 text-xs text-slate-600">
                     {new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                   </td>
