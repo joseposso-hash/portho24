@@ -25,7 +25,7 @@ export default function HistorialPage() {
     const inicioDia = fechaFiltro ? `${fechaFiltro}T00:00:00` : null;
     const finDia = fechaFiltro ? `${fechaFiltro}T23:59:59` : null;
 
-    let qPacks = supabase.from('packages').select('*, units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
+    let qPacks = supabase.from('packages').select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     let qVisits = supabase.from('visits').select('*, visitors(full_name, doc_number), units(code, towers(name))').order('created_at', { ascending: false }).limit(100);
     
     // 🔥 CONSULTA SIMPLE: Sin Join a units. Solo traemos la sesión y el vehículo.
@@ -48,13 +48,7 @@ export default function HistorialPage() {
     setLoading(false);
   }
 
-  async function regenerarPin(id: string) {
-    if (!confirm('¿Regenerar el PIN?')) return;
-    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
-    const { error } = await supabase.from('packages').update({ pin_hash: newPin }).eq('id', id);
-    if (error) alert('Error: ' + error.message);
-    else { alert(`✅ Nuevo PIN: ${newPin}`); cargarDatos(); }
-  }
+
 
   const paquetesFiltrados = paquetes.filter(p => p.courier?.toLowerCase().includes(busqueda.toLowerCase()) || p.tracking_number?.toLowerCase().includes(busqueda.toLowerCase()));
   const visitasFiltradas = visitas.filter(v => (v.visitors as any)?.full_name?.toLowerCase().includes(busqueda.toLowerCase()) || (v.visitors as any)?.doc_number?.includes(busqueda));
@@ -106,20 +100,20 @@ export default function HistorialPage() {
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
         {tab === 'paquetes' && (
           <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b"><tr><th className="px-4 py-3">Foto</th><th className="px-4 py-3">Courier / Guía</th><th className="px-4 py-3">Destino</th><th className="px-4 py-3">PIN</th><th className="px-4 py-3">Recibido</th><th className="px-4 py-3">Entregado</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Acciones</th></tr></thead>
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b"><tr><th className="px-4 py-3">Foto</th><th className="px-4 py-3">Courier / Guía</th><th className="px-4 py-3">Destino</th><th className="px-4 py-3">Recibido</th><th className="px-4 py-3">Entregado</th><th className="px-4 py-3">Estado</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? <tr><td colSpan={8} className="p-6 text-center">Cargando...</td></tr> : 
+              {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
                paquetesFiltrados.length === 0 ? <tr><td colSpan={8} className="p-6 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
                paquetesFiltrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2"><img src={p.photo_url} className="h-8 w-8 object-cover rounded" /></td>
                   <td className="px-4 py-2 font-semibold text-slate-900">{p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span></td>
                   <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">{(p.units as any)?.towers?.name} - {(p.units as any)?.code}</td>
-                  <td className="px-4 py-2 font-mono text-slate-400">••••••</td>
+                  
                   <td className="px-4 py-2 text-xs text-slate-600">{new Date(p.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</td>
                   <td className="px-4 py-2 text-xs text-slate-600">{p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                   <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{p.status === 'received' ? 'Pendiente' : 'Entregado'}</span></td>
-                  <td className="px-4 py-2">{p.status === 'received' ? <button onClick={() => regenerarPin(p.id)} className="text-xs bg-amber-100 text-amber-800 px-3 py-1.5 rounded hover:bg-amber-200 font-medium">Regenerar PIN</button> : <span className="text-xs text-slate-400">-</span>}</td>
+                  
                 </tr>
               ))}
             </tbody>
