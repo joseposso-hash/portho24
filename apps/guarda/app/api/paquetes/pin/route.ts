@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const pin = decryptPackagePin(secret.pin_ciphertext, secret.pin_iv, secret.pin_auth_tag);
-    return NextResponse.json({ success: true, pin });
+    return NextResponse.json({ success: true, pin, packageRef: pack.id.replace(/-/g, '').slice(-8) });
   } catch (error) {
     console.error('Error consultando PIN del residente:', error);
     return jsonError('No fue posible consultar el PIN.', 500);
