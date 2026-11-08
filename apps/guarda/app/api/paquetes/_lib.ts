@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createHash, createHmac, randomBytes, randomInt, createCipheriv, createDecipheriv } from 'node:crypto';
+import { createHmac, randomBytes, randomInt, createCipheriv, createDecipheriv } from 'node:crypto';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
 
 export type PackageProfile = {
