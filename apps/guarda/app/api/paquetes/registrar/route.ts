@@ -16,8 +16,16 @@ export async function POST(request: NextRequest) {
     if (!unitId || !courier || courier.length > 80 || tracking.length > 120 || !photoUrl) {
       return jsonError('Completa los datos obligatorios del paquete.', 400);
     }
-    const parsedPhoto = new URL(photoUrl);
-    const expected = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) return jsonError('Configuración de almacenamiento incompleta.', 500);
+    let parsedPhoto: URL;
+    let expected: URL;
+    try {
+      parsedPhoto = new URL(photoUrl);
+      expected = new URL(supabaseUrl);
+    } catch {
+      return jsonError('La dirección de la fotografía no es válida.', 400);
+    }
     if (parsedPhoto.origin !== expected.origin || !parsedPhoto.pathname.includes('/storage/v1/object/public/evidences/')) {
       return jsonError('La fotografía no corresponde al almacenamiento autorizado.', 400);
     }
