@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { authorizePackageUser, createPackagePin, jsonError, supabaseAdmin } from '../_lib';
 
 export async function POST(request: NextRequest) {
