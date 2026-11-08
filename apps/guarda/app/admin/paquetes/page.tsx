@@ -79,7 +79,7 @@ export default function AdminPaquetes() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={6} className="p-8 text-center">Cargando...</td></tr> : 
-               filtrados.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
+               filtrados.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
