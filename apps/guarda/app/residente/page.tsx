@@ -9,6 +9,8 @@ export default function ResidentePage() {
   
   const [loading, setLoading] = useState(true);
   const [paquetes, setPaquetes] = useState<any[]>([]);
+  const [pinsPaquetes, setPinsPaquetes] = useState<Record<string, { pin: string; packageRef: string }>>({});
+  const [pinLoading, setPinLoading] = useState<string | null>(null);
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'reservas' | 'pqrs' | 'muro'>('paquetes');
   
   const [miUnidad, setMiUnidad] = useState<any>(null);
@@ -60,7 +62,7 @@ export default function ResidentePage() {
 
       // Hacemos las consultas en paralelo (mucho más rápido)
       const [packs, vis, visIn, areasData, reservasData, pqrsData, commData] = await Promise.all([
-        supabase.from('packages').select('*').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false }),
+        supabase.from('packages').select('id, courier, tracking_number, photo_url, status, created_at').eq('recipient_unit_id', profile.units.id).eq('status', 'received').order('created_at', { ascending: false }),
         supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'authorized').order('created_at', { ascending: false }),
         supabase.from('visits').select('*, visitors(full_name, doc_number)').eq('unit_id', profile.units.id).eq('status', 'checked_in').order('check_in_at', { ascending: false }).limit(5),
         supabase.from('areas_comunes').select('*'),
@@ -85,6 +87,27 @@ export default function ResidentePage() {
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
+
+  async function consultarPinPaquete(packageId: string) {
+    if (pinsPaquetes[packageId]) return;
+    setPinLoading(packageId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
+      const response = await fetch('/api/paquetes/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ packageId })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No fue posible consultar el PIN.');
+      setPinsPaquetes(current => ({ ...current, [packageId]: { pin: result.pin, packageRef: result.packageRef } }));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'No fue posible consultar el PIN.');
+    } finally {
+      setPinLoading(null);
+    }
+  }
 
   async function generarQR(e: React.FormEvent) {
     e.preventDefault();
@@ -227,9 +250,17 @@ export default function ResidentePage() {
                     <div className="flex-1">
                       <p className="font-bold text-slate-800">{p.courier}</p>
                       <p className="text-xs text-slate-500 mb-2">Guía: {p.tracking_number || 'N/A'}</p>
-                      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-1.5 inline-block">
-                        <span className="text-xs font-semibold">PIN: </span><span className="font-mono font-bold text-sm tracking-wider">{p.pin_hash}</span>
-                      </div>
+                      {pinsPaquetes[p.id] ? (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 inline-block">
+                          <span className="text-xs font-semibold">PIN de retiro: </span><span className="font-mono font-bold text-lg tracking-wider">{pinsPaquetes[p.id].pin}</span>
+                          <p className="text-[11px] mt-1">Referencia para vigilancia: {pinsPaquetes[p.id].packageRef}</p>
+                        </div>
+                      ) : (
+                        <button onClick={() => consultarPinPaquete(p.id)} disabled={pinLoading === p.id}
+                          className="rounded-lg bg-[#1E3A5F] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                          {pinLoading === p.id ? 'Consultando…' : 'Consultar PIN de retiro'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
