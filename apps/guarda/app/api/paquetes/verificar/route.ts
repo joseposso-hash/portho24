@@ -7,9 +7,15 @@ export async function POST(request: NextRequest) {
   if (access.profile.role !== 'guard') return jsonError('Solo vigilancia puede validar la entrega.', 403);
   try {
     const body = await request.json();
-    const packageId = String(body.packageId ?? '');
+    let packageId = String(body.packageId ?? '');
+    const packageRef = String(body.packageRef ?? '').toLowerCase();
     const pin = String(body.pin ?? '');
     const pickup = body.pickup === true;
+    if (!packageId && /^[0-9a-f]{8}$/.test(packageRef)) {
+      const { data: pending } = await supabaseAdmin.from('packages').select('id').eq('tenant_id', access.profile.tenant_id).eq('status', 'received');
+      const matches = (pending || []).filter((item: { id: string }) => item.id.replace(/-/g, '').toLowerCase().endsWith(packageRef));
+      if (matches.length === 1) packageId = matches[0].id;
+    }
     if (!/^[0-9a-f-]{36}$/i.test(packageId) || !/^\d{6}$/.test(pin)) return jsonError('Datos de validación no válidos.', 400);
     const { data, error } = await supabaseAdmin.rpc('verify_package_pin', {
       p_tenant_id: access.profile.tenant_id,
