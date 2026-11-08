@@ -31,7 +31,7 @@ export default function AdminDashboard() {
       // 2. Cargar datos filtrados por el tenant del admin
       const { data: packData } = await supabase
         .from('packages')
-        .select('*, units(code, towers(name))')
+        .select('id, courier, photo_url, status, created_at, units(code, towers(name))')
         .eq('tenant_id', tenantId) // <-- FILTRO
         .eq('status', 'received')
         .order('created_at', { ascending: false })
