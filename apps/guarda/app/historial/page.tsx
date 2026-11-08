@@ -103,7 +103,7 @@ export default function HistorialPage() {
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b"><tr><th className="px-4 py-3">Foto</th><th className="px-4 py-3">Courier / Guía</th><th className="px-4 py-3">Destino</th><th className="px-4 py-3">Recibido</th><th className="px-4 py-3">Entregado</th><th className="px-4 py-3">Estado</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan={6} className="p-6 text-center">Cargando...</td></tr> : 
-               paquetesFiltrados.length === 0 ? <tr><td colSpan={8} className="p-6 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
+               paquetesFiltrados.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
                paquetesFiltrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2"><img src={p.photo_url} className="h-8 w-8 object-cover rounded" /></td>
