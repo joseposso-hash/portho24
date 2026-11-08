@@ -42,7 +42,7 @@ export default function AdminReportes() {
     }
     const inicioISO = fechaInicioCalculada.toISOString();
 
-    const { data: pData } = await supabase.from('packages').select('*').eq('tenant_id', tId).gte('created_at', inicioISO);
+    const { data: pData } = await supabase.from('packages').select('id, courier, tracking_number, status, created_at').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: vData } = await supabase.from('visits').select('*, visitors(full_name)').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: cData } = await supabase.from('parking_sessions').select('*, vehicles(plate)').eq('tenant_id', tId).gte('created_at', inicioISO);
     const { data: qData } = await supabase.from('pqrs').select('*').eq('tenant_id', tId).gte('created_at', inicioISO);
