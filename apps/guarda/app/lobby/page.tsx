@@ -51,21 +51,17 @@ export default function LobbyPage() {
 
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
-      const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('La sesión expiró. Inicia sesión nuevamente.');
 
-      const { error: dbError } = await supabase.from('packages').insert({
-        tenant_id: tenantId,
-        recipient_unit_id: unitId,
-        courier: courier,
-        tracking_number: tracking || null,
-        photo_url: publicUrl,
-        status: 'received',
-        pin_hash: generatedPin,
-        received_by: (await supabase.auth.getUser()).data.user?.id
+      const response = await fetch('/api/paquetes/registrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ unitId, courier, tracking, photoUrl: publicUrl })
       });
-
-      if (dbError) throw dbError;
-      setPin(generatedPin);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No fue posible registrar el paquete.');
+      setPin('registrado');
       
     } catch (err: any) {
       console.error(err);
@@ -88,10 +84,10 @@ export default function LobbyPage() {
       {pin ? (
         <div className="max-w-xl rounded-2xl bg-emerald-50 p-8 text-center shadow-lg border border-emerald-200">
           <h2 className="text-2xl font-bold text-emerald-900 mb-2">¡Paquete Registrado!</h2>
-          <p className="text-emerald-700 mb-6">El residente ha sido notificado.</p>
+          <p className="text-emerald-700 mb-6">Registro confirmado. El PIN queda reservado para consulta del residente; vigilancia no puede verlo.</p>
           <div className="bg-white rounded-xl p-6 inline-block shadow-sm">
-            <p className="text-sm text-slate-500 mb-1">PIN de retiro (6 dígitos)</p>
-            <p className="text-5xl font-black tracking-widest text-emerald-600">{pin}</p>
+            <p className="text-sm font-semibold text-emerald-800">Paquete registrado correctamente</p>
+            <p className="text-sm text-slate-500 mt-1">El PIN no se muestra al personal de vigilancia.</p>
           </div>
           <div className="mt-8">
             <button onClick={() => { setPin(null); setPhoto(null); setTracking(''); setUnitId(''); setUnitSearch(''); }} className="rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
@@ -142,7 +138,7 @@ export default function LobbyPage() {
           </label>
 
           <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white transition hover:bg-[#152945] disabled:opacity-50">
-            {loading ? 'Guardando paquete…' : 'Registrar paquete y generar PIN'}
+            {loading ? 'Guardando paquete…' : 'Registrar paquete'}
           </button>
         </form>
       )}
