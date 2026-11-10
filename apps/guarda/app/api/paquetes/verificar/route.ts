@@ -3,7 +3,7 @@ import { authorizePackageUser, digestPackagePin, jsonError, supabaseAdmin } from
 
 export async function POST(request: NextRequest) {
   const access = await authorizePackageUser(request);
-  if ('error' in access) return jsonError(access.error, access.status);
+  if (!access.ok) return jsonError(access.error, access.status);
   if (access.profile.role !== 'guard') return jsonError('Solo vigilancia puede validar la entrega.', 403);
 
   try {

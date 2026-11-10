@@ -4,7 +4,7 @@ import { authorizePackageUser, decryptPackagePin, jsonError, supabaseAdmin } fro
 export async function POST(request: NextRequest) {
   try {
     const access = await authorizePackageUser(request);
-    if ('error' in access) return jsonError(access.error, access.status);
+    if (!access.ok) return jsonError(access.error, access.status);
     if (access.profile.role !== 'resident' || !access.profile.unit_id) return jsonError('Solo el residente asignado puede consultar este PIN.', 403);
 
     const body = await request.json();

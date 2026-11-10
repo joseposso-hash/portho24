@@ -1,10 +1,10 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { authorizePackageUser, createPackagePin, jsonError, supabaseAdmin } from '../_lib';
 
 export async function POST(request: NextRequest) {
   try {
     const access = await authorizePackageUser(request);
-    if ('error' in access) return jsonError(access.error, access.status);
+    if (!access.ok) return jsonError(access.error, access.status);
     if (access.profile.role !== 'guard') return jsonError('Solo el personal de vigilancia puede registrar paquetes.', 403);
 
     const body = await request.json();

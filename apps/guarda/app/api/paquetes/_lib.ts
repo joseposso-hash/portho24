@@ -13,30 +13,30 @@ export type PackageProfile = {
   is_active: boolean;
 };
 
-export async function authorizePackageUser(request: NextRequest) {
+export async function authorizePackageUser(request: NextRequest): Promise<PackageAccess> {
   const authorization = request.headers.get('authorization');
   const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
-  if (!token) return { error: 'Sesión no válida.', status: 401 as const };
+  if (!token) return { ok: false, error: 'Sesión no válida.', status: 401 };
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return { error: 'Configuración del servidor incompleta.', status: 500 as const };
+  if (!url || !anonKey) return { ok: false, error: 'Configuración del servidor incompleta.', status: 500 };
 
   const client = createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: auth, error: authError } = await client.auth.getUser(token);
-  if (authError || !auth.user) return { error: 'Sesión no válida o vencida.', status: 401 as const };
+  if (authError || !auth.user) return { ok: false, error: 'Sesión no válida o vencida.', status: 401 };
 
   const { data: profile, error } = await client.from('users')
     .select('id, tenant_id, role, unit_id, is_active')
     .eq('id', auth.user.id).maybeSingle();
 
   if (error || !profile || profile.is_active !== true || !profile.tenant_id) {
-    return { error: 'Usuario inactivo o sin conjunto asignado.', status: 403 as const };
+    return { ok: false, error: 'Usuario inactivo o sin conjunto asignado.', status: 403 };
   }
-  return { user: auth.user, profile: profile as PackageProfile };
+  return { ok: true, user: { id: auth.user.id }, profile: profile as PackageProfile };
 }
 
 function keyFromEnv(name: string): Buffer {
