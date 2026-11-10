@@ -1,4 +1,6 @@
 'use client';
+
+import { getHouseNumber } from '../lib/house-number';
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase';
@@ -15,7 +17,7 @@ function ParkingContent() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [placa, setPlaca] = useState('');
-  const [apto, setApto] = useState(casaParam || '');
+  const [apto, setApto] = useState((casaParam || '').replace(/\D/g, '').slice(0, 3));
   const [conductor, setConductor] = useState(nombreParam || '');
   const [docConductor, setDocConductor] = useState(docParam || '');
   const [fotoConductor, setFotoConductor] = useState<File | null>(null);
@@ -25,6 +27,9 @@ function ParkingContent() {
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [recibo, setRecibo] = useState<any>(null);
+  const [payerType, setPayerType] = useState<'visitor' | 'resident'>('visitor');
+  const [residentOptions, setResidentOptions] = useState<any[]>([]);
+  const [residentPayerId, setResidentPayerId] = useState('');
 
   useEffect(() => {
     async function init() {
@@ -38,30 +43,44 @@ function ParkingContent() {
 
   async function handleBuscar(e: React.FormEvent) {
     e.preventDefault();
+
     if (!placa || !tenantId) return;
+
     setLoading(true);
     setErrorMsg(null);
     setRecibo(null);
+    setPayerType('visitor');
+    setResidentPayerId('');
+    setResidentOptions([]);
 
     const placaUpper = placa.toUpperCase();
 
     try {
-      let { data: vehiculosEncontrados } = await supabase
+      let { data: vehiculosEncontrados, error: vehError } = await supabase
         .from('vehicles')
         .select('*')
         .eq('plate', placaUpper)
         .eq('tenant_id', tenantId)
         .limit(1);
 
-      let veh = vehiculosEncontrados && vehiculosEncontrados.length > 0 ? vehiculosEncontrados[0] : null;
+      if (vehError) throw vehError;
+
+      let veh = vehiculosEncontrados && vehiculosEncontrados.length > 0
+        ? vehiculosEncontrados[0]
+        : null;
 
       if (!veh) {
         const { data: newVeh, error: errNewVeh } = await supabase
           .from('vehicles')
-          .insert({ tenant_id: tenantId, plate: placaUpper, type: 'car' })
+          .insert({
+            tenant_id: tenantId,
+            plate: placaUpper,
+            type: 'car'
+          })
           .select()
           .single();
-        if (errNewVeh) throw new Error(errNewVeh.message);
+
+        if (errNewVeh) throw errNewVeh;
         veh = newVeh;
       }
 
@@ -69,44 +88,88 @@ function ParkingContent() {
         .from('parking_sessions')
         .select('*')
         .eq('vehicle_id', veh.id)
-        .eq('status', 'active');
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active')
+        .limit(1);
 
-      if (errSes) throw new Error(errSes.message);
+      if (errSes) throw errSes;
 
-      const activeSession = sessions && sessions.length > 0 ? sessions[0] : null;
+      const activeSession = sessions && sessions.length > 0
+        ? sessions[0]
+        : null;
 
-      if (activeSession) {
-        const checkInTime = new Date(activeSession.check_in_at).getTime();
-        const now = new Date().getTime();
-        const diffMins = Math.floor((now - checkInTime) / 60000);
-        
-        let total = 0;
-        if (diffMins > 15) {
-          const hours = Math.ceil(diffMins / 60);
-          total = hours * 3000;
+      if (activeSession?.unit_id) {
+        const { data: residentes, error: residentesError } = await supabase
+          .from('users')
+          .select('id, full_name, email')
+          .eq('tenant_id', tenantId)
+          .eq('unit_id', activeSession.unit_id)
+          .eq('role', 'resident')
+          .eq('is_active', true)
+          .order('full_name', { ascending: true });
+
+        if (residentesError) {
+          console.error('Error consultando residentes:', residentesError);
+          setErrorMsg(
+            'Vehículo encontrado. No fue posible consultar los residentes; puedes registrar la salida a cargo del visitante.'
+          );
+          setResidentOptions([]);
+        } else {
+          const opciones = residentes || [];
+          setResidentOptions(opciones);
+
+          if (opciones.length === 1) {
+            setResidentPayerId(opciones[0].id);
+          }
         }
-
-        setVehiculo({ ...veh, activeSession, diffMins });
-        setRecibo({ total, sessionId: activeSession.id });
-      } else {
-        setVehiculo({ ...veh, activeSession: null });
       }
+
+      setVehiculo({
+        ...veh,
+        activeSession
+      });
+
     } catch (err: any) {
+      setVehiculo(null);
       setErrorMsg(err.message || 'Error al buscar la placa.');
     } finally {
       setLoading(false);
     }
   }
-
   async function confirmarEntrada() {
     if (!apto || !conductor || !docConductor || !fotoConductor || !fotoVehiculo || !tenantId) {
       setErrorMsg('Por favor, completa los datos y toma ambas fotos.');
       return;
     }
     
+    const casaDestino = apto.trim();
+
+    if (!/^\d{1,3}$/.test(casaDestino) || Number(casaDestino) < 1 || Number(casaDestino) > 460) {
+      setErrorMsg('Ingresa un nÃºmero de casa vÃ¡lido entre 1 y 460.');
+      return;
+    }
+
+    setErrorMsg(null);
     setLoading(true);
     
     try {
+      const { data: tower, error: towerError } = await supabase
+        .from('towers')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (towerError || !tower) throw new Error('No se encontró la torre del conjunto.');
+
+      const { data: unit, error: unitError } = await supabase
+        .from('units')
+        .select('id')
+        .eq('tower_id', tower.id)
+        .eq('code', casaDestino)
+        .single();
+
+      if (unitError || !unit) throw new Error('La casa indicada no existe.');
+
       const fileExtCond = fotoConductor.name.split('.').pop();
       const fileNameCond = `conductores/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtCond}`;
       const { error: errUpCond } = await supabase.storage.from('evidences').upload(fileNameCond, fotoConductor, { contentType: fotoConductor.type });
@@ -122,11 +185,12 @@ function ParkingContent() {
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
+        unit_id: unit.id,
         visit_id: visitIdParam || null, 
         status: 'active',
         check_in_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
-        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: Casa ${apto}`,
+        notes: `Conductor: ${conductor} - Doc: ${docConductor} - Destino: Casa ${casaDestino}`,
         photo_url: urlVehiculo,
         driver_photo_url: urlConductor
       });
@@ -142,25 +206,100 @@ function ParkingContent() {
     }
   }
 
-  async function confirmarSalida(monto: number, metodo: string) {
-    if (!recibo) return;
-    setLoading(true);
-    
-    try {
-      const { error } = await supabase.from('parking_sessions').update({
-        status: 'paid', check_out_at: new Date().toISOString(), amount_due: monto, amount_paid: monto, payment_method: metodo
-      }).eq('id', recibo.sessionId);
+  async function confirmarSalida(_monto: number, metodo: string) {
+    const sessionId = vehiculo?.activeSession?.id;
 
-      if (error) throw error;
-      alert(`✅ Salida registrada. Cobro: $${monto.toLocaleString('es-CO')}`);
+    if (!sessionId) {
+      setErrorMsg('No se encontró una sesión activa para este vehículo.');
+      return;
+    }
+
+    if (payerType === 'resident') {
+      if (!residentOptions.length) {
+        setErrorMsg('No hay residentes activos disponibles para asumir este cobro.');
+        return;
+      }
+
+      if (!residentPayerId || !residentOptions.some(
+        (residente: any) => residente.id === residentPayerId
+      )) {
+        setErrorMsg('Selecciona un residente válido como responsable del pago.');
+        return;
+      }
+    }
+
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const { data: cierre, error: cierreError } = await supabase.rpc(
+        'close_parking_session',
+        {
+          p_session_id: sessionId,
+          p_payer_type: payerType,
+          p_payer_user_id: payerType === 'resident'
+            ? residentPayerId
+            : null
+        }
+      );
+
+      if (cierreError) throw cierreError;
+
+      const total = Number(cierre?.amount_due ?? 0);
+
+      if (!Number.isFinite(total) || total < 0) {
+        throw new Error('El sistema devolvió un valor de cobro inválido.');
+      }
+
+      if (payerType === 'resident') {
+        alert(
+          `Salida registrada. Se solicitó autorización al residente. Valor: $${total.toLocaleString('es-CO')}`
+        );
+      } else if (metodo === 'cash' && total > 0) {
+        const { error: pagoError } = await supabase.rpc(
+          'record_parking_payment',
+          {
+            p_session_id: sessionId,
+            p_amount: total,
+            p_payment_method: 'cash',
+            p_reference: null,
+            p_notes: 'Pago recibido en portería'
+          }
+        );
+
+        if (pagoError) {
+          console.error('Error registrando el pago:', pagoError);
+
+          setVehiculo((actual: any) => actual
+            ? { ...actual, activeSession: null }
+            : actual
+          );
+
+          setErrorMsg(
+            `La salida quedó registrada, pero no se pudo registrar el pago de $${total.toLocaleString('es-CO')}. El saldo permanece pendiente. Informa al administrador.`
+          );
+
+          return;
+        }
+
+        alert(
+          `Salida registrada. Pago recibido: $${total.toLocaleString('es-CO')}`
+        );
+      } else {
+        alert(
+          `Salida registrada. Saldo pendiente: $${total.toLocaleString('es-CO')}`
+        );
+      }
+
       window.location.reload();
+
     } catch (err: any) {
-      setErrorMsg('Error al registrar salida: ' + err.message);
+      console.error('Error al registrar salida:', err);
+      setErrorMsg(err.message || 'No fue posible registrar la salida.');
     } finally {
       setLoading(false);
     }
   }
-
   return (
     <div className="min-h-screen bg-slate-100 p-6 flex flex-col items-center">
       <header className="w-full max-w-lg mb-8 flex items-center justify-between">
@@ -180,23 +319,165 @@ function ParkingContent() {
             {errorMsg && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>}
             <input type="text" value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} placeholder="ABC123" maxLength={6} className="w-full text-center text-4xl font-black tracking-widest text-slate-900 border-b-2 border-slate-300 focus:border-emerald-500 focus:outline-none pb-4 uppercase" required />
             <button type="submit" disabled={loading || placa.length < 5} className="w-full rounded-xl bg-[#1E3A5F] py-4 text-lg font-semibold text-white transition hover:bg-[#152945] disabled:opacity-50">
-              {loading ? 'Buscando…' : 'Buscar Placa'}
+              {loading ? 'Buscandoâ€¦' : 'Buscar Placa'}
             </button>
           </form>
         ) : vehiculo.activeSession ? (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-bold text-slate-900">Salida de Vehículo</h2>
-            <p className="text-3xl font-black text-slate-700 tracking-widest">{vehiculo.plate}</p>
-            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 mb-4">
-              <p className="text-sm text-emerald-600 font-medium">Total a cobrar</p>
-              <p className="text-4xl font-black text-emerald-700">${recibo.total.toLocaleString('es-CO')}</p>
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-900">
+                Salida de Vehículo
+              </h2>
+              <p className="text-3xl font-black text-slate-700 tracking-widest mt-2">
+                {vehiculo.plate}
+              </p>
             </div>
+
+            {errorMsg && (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+              <p className="text-sm font-medium text-emerald-700">
+                Tarifa calculada por el sistema
+              </p>
+              <p className="mt-1 text-lg font-semibold text-emerald-800">
+                El valor se calculará al registrar la salida.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-semibold text-slate-800">
+                Responsable del pago
+              </h3>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setPayerType('visitor');
+                  setResidentPayerId('');
+                  setErrorMsg(null);
+                }}
+                className={`w-full rounded-xl border p-4 text-left transition ${
+                  payerType === 'visitor'
+                    ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200'
+                    : 'border-slate-200 bg-white'
+                }`}
+              >
+                <span className="block font-semibold text-slate-800">
+                  Visitante
+                </span>
+                <span className="block text-sm text-slate-500">
+                  El visitante paga en portería o deja saldo pendiente.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setPayerType('resident');
+                  setErrorMsg(null);
+                }}
+                className={`w-full rounded-xl border p-4 text-left transition ${
+                  payerType === 'resident'
+                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                    : 'border-slate-200 bg-white'
+                }`}
+              >
+                <span className="block font-semibold text-slate-800">
+                  Residente de la casa
+                </span>
+                <span className="block text-sm text-slate-500">
+                  Se solicitará autorización digital antes de registrar el cobro.
+                </span>
+              </button>
+            </div>
+
+            {payerType === 'resident' && (
+              <div className="space-y-2">
+                <label
+                  htmlFor="residentPayer"
+                  className="block text-sm font-semibold text-slate-700"
+                >
+                  Seleccionar residente responsable
+                </label>
+
+                {residentOptions.length > 0 ? (
+                  <select
+                    id="residentPayer"
+                    value={residentPayerId}
+                    onChange={(e) => setResidentPayerId(e.target.value)}
+                    disabled={loading}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-800 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Selecciona un residente</option>
+                    {residentOptions.map((residente: any) => (
+                      <option key={residente.id} value={residente.id}>
+                        {residente.full_name || residente.email || 'Residente'}
+                        {residente.email ? ` — ${residente.email}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    No hay residentes activos disponibles para esta casa. No se puede solicitar un cobro a residente.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-col gap-3">
-              <button onClick={() => confirmarSalida(recibo.total, 'cash')} disabled={loading} className="w-full rounded-xl bg-emerald-600 py-4 text-lg font-semibold text-white transition hover:bg-emerald-700">Cobrar y dar Salida</button>
-              <button onClick={() => confirmarSalida(0, 'free')} disabled={loading} className="w-full rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-700">Dar Salida sin Cobro</button>
+              {payerType === 'resident' ? (
+                <button
+                  type="button"
+                  onClick={() => confirmarSalida(0, 'pending')}
+                  disabled={loading || !residentOptions.length || !residentPayerId}
+                  className="w-full rounded-xl bg-blue-600 py-4 text-lg font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? 'Procesando...' : 'Solicitar autorización y dar salida'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => confirmarSalida(0, 'cash')}
+                    disabled={loading}
+                    className="w-full rounded-xl bg-emerald-600 py-4 text-lg font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {loading ? 'Procesando...' : 'Cobrar y dar salida'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => confirmarSalida(0, 'free')}
+                    disabled={loading}
+                    className="w-full rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                  >
+                    Registrar salida con pago pendiente
+                  </button>
+                </>
+              )}
             </div>
-          </div>
-        ) : (
+
+            <button
+              type="button"
+              onClick={() => {
+                setVehiculo(null);
+                setResidentOptions([]);
+                setResidentPayerId('');
+                setPayerType('visitor');
+                setErrorMsg(null);
+              }}
+              disabled={loading}
+              className="w-full py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+            >
+              Buscar otro vehículo
+            </button>
+          </div>        ) : (
           <div className="space-y-6">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-slate-900">Registrar Entrada</h2>
@@ -207,7 +488,17 @@ function ParkingContent() {
             <div className="grid grid-cols-1 gap-4">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Casa / Unidad Destino</span>
-                <input type="text" value={apto} onChange={(e) => setApto(e.target.value)} placeholder="Ej: 125" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required />
+                                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{1,3}"
+                  maxLength={3}
+                  value={apto}
+                  onChange={(e) => setApto(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                  placeholder="NÃºmero de casa (1-460)"
+                  className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900"
+                  required
+                />
               </label>
             </div>
 
@@ -227,7 +518,7 @@ function ParkingContent() {
               <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
                   <span className="text-2xl">🧑</span>
-                  <span className="font-medium text-slate-600 text-xs">{fotoConductor ? '✅ Foto conductor capturada' : 'Tomar foto del conductor'}</span>
+                  <span className="font-medium text-slate-600 text-xs">{fotoConductor ? '✓️ Foto conductor capturada' : 'Tomar foto del conductor'}</span>
                 </span>
                 <input type="file" accept="image/*" capture="user" onChange={(e) => setFotoConductor(e.target.files?.[0] || null)} className="hidden" />
               </label>
@@ -238,7 +529,7 @@ function ParkingContent() {
               <label className="flex items-center justify-center w-full h-20 px-4 transition bg-white border-2 border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-[#1E3A5F]">
                 <span className="flex flex-col items-center space-y-1">
                   <span className="text-2xl">🚗</span>
-                  <span className="font-medium text-slate-600 text-xs">{fotoVehiculo ? '✅ Foto vehículo capturada' : 'Tomar foto del vehículo'}</span>
+                  <span className="font-medium text-slate-600 text-xs">{fotoVehiculo ? '✓️ Foto vehículo capturada' : 'Tomar foto del vehículo'}</span>
                 </span>
                 <input type="file" accept="image/*" capture="environment" onChange={(e) => setFotoVehiculo(e.target.files?.[0] || null)} className="hidden" />
               </label>
@@ -261,3 +552,6 @@ export default function ParkingPage() {
     </Suspense>
   );
 }
+
+
+
