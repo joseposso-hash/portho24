@@ -13,6 +13,9 @@ export type PackageProfile = {
   is_active: boolean;
 };
 
+export type PackageAccess =
+  | { ok: true; user: { id: string }; profile: PackageProfile }
+  | { ok: false; error: string; status: 401 | 403 | 500 };
 export async function authorizePackageUser(request: NextRequest): Promise<PackageAccess> {
   const authorization = request.headers.get('authorization');
   const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
