@@ -47,7 +47,7 @@ const menuGroups = [
   {
     title: 'Operación de portería',
     items: [
-      { label: 'Paquetería', href: '/admin/paquetes', icon: 'package' as const },
+      { label: 'Paquetes', href: '/admin/paquetes', icon: 'package' as const },
       { label: 'Correspondencia', href: '/admin/correspondencia', icon: 'mail' as const },
       { label: 'Visitas', href: '/admin/visitas', icon: 'users' as const },
       { label: 'Vehículos', href: '/admin/vehiculos', icon: 'car' as const },
@@ -57,7 +57,8 @@ const menuGroups = [
   {
     title: 'Comunidad y convivencia',
     items: [
-      { label: 'Residentes', href: '/admin/directorio', icon: 'users' as const },
+      { label: 'Directorio', href: '/admin/directorio', icon: 'users' as const },
+      { label: 'Hogares', href: '/admin/residentes', icon: 'users' as const },
       { label: 'Reservas', href: '/admin/reservas', icon: 'calendar' as const },
       { label: 'PQRS', href: '/admin/pqrs', icon: 'clipboard' as const },
       { label: 'Comunicados', href: '/admin/comunicados', icon: 'megaphone' as const },
@@ -124,7 +125,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {isOpen && (
         <button
           type="button"
-          aria-label="Cerrar menú"
+          aria-label="Cerrar menÃº"
           className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
           onClick={() => setIsOpen(false)}
         />
@@ -142,7 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <button
             type="button"
-            aria-label={isOpen ? 'Cerrar menú' : 'Expandir menú'}
+            aria-label={isOpen ? 'Cerrar menÃº' : 'Expandir menÃº'}
             onClick={() => setIsOpen(!isOpen)}
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:hidden"
           >
@@ -215,7 +216,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-4 md:hidden">
           <button
             type="button"
-            aria-label="Abrir menú"
+            aria-label="Abrir menÃº"
             onClick={() => setIsOpen(true)}
             className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100"
           >
