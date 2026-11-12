@@ -1,4 +1,6 @@
 'use client';
+
+import { getHouseNumber } from '../../lib/house-number';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -74,7 +76,7 @@ export default function AdminReservas() {
                       {(r.areas_comunes as any)?.icon} {(r.areas_comunes as any)?.name}
                     </td>
                     <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">
-                      {(r.units as any)?.towers?.name} - {(r.units as any)?.code}
+                      {(r.units as any)?.towers?.name} - {getHouseNumber((r.units as any)?.code)}
                     </td>
                     <td className="px-6 py-3 text-xs text-slate-700">
                       {r.date} <br/> {r.start_time} - {r.end_time}

@@ -1,7 +1,9 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-
+
+import EvidenceImage from '../../components/EvidenceImage';
 export default function AdminVehiculos() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +107,7 @@ export default function AdminVehiculos() {
                   <tr key={v.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       {v.photo_url ? (
-                        <img src={v.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
+                        <EvidenceImage src={v.photo_url} alt="Vehículo" className="h-10 w-10 object-cover rounded shadow-sm" />
                       ) : (
                         <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
                       )}
@@ -113,7 +115,7 @@ export default function AdminVehiculos() {
                     <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate}</td>
                     <td className="px-4 py-3 text-xs font-medium text-slate-700 flex items-center gap-2">
                       {v.driver_photo_url && (
-                        <img src={v.driver_photo_url} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
+                        <EvidenceImage src={v.driver_photo_url} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
                       )}
                       {d.conductor}
                     </td>

@@ -1,5 +1,7 @@
 'use client';
 
+import { getHouseNumber } from '../../lib/house-number';
+
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -126,7 +128,7 @@ export default function AdminUsuarios() {
 
     return usuarios.filter((usuario) => {
       const codigoCasa = usuario.unit_id
-        ? unidadesPorId.get(usuario.unit_id) || ''
+        ? getHouseNumber(unidadesPorId.get(usuario.unit_id) || '')
         : '';
 
       const coincideBusqueda =
@@ -384,7 +386,7 @@ export default function AdminUsuarios() {
 
                     return (
                       <option key={unidad.id} value={unidad.id} disabled={ocupada}>
-                        Casa {unidad.code}{ocupada ? ' — Ocupada' : ''}
+                        Casa {getHouseNumber(unidad.code)}{ocupada ? ' — Ocupada' : ''}
                       </option>
                     );
                   })}
@@ -534,3 +536,4 @@ export default function AdminUsuarios() {
     </main>
   );
 }
+

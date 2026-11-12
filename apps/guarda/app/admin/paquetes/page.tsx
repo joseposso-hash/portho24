@@ -1,7 +1,10 @@
 'use client';
+
+import { getHouseNumber } from '../../lib/house-number';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-
+
+import EvidenceImage from '../../components/EvidenceImage';
 export default function AdminPaquetes() {
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +85,12 @@ export default function AdminPaquetes() {
                filtrados.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay paquetes registrados.</td></tr> :
                filtrados.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3"><img src={p.photo_url} className="h-10 w-10 object-cover rounded-lg" /></td>
+                  <td className="px-4 py-3"><EvidenceImage src={p.photo_url} alt="Paquete" className="h-10 w-10 object-cover rounded-lg" /></td>
                   <td className="px-4 py-3 font-semibold text-slate-900">
                     {p.courier}<br/><span className="text-xs font-normal text-slate-500">{p.tracking_number}</span>
                   </td>
                   <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
-                    {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                    {(p.units as any)?.towers?.name} - {getHouseNumber((p.units as any)?.code)}
                   </td>
                   
                   <td className="px-4 py-3 text-xs text-slate-600">
@@ -97,8 +100,22 @@ export default function AdminPaquetes() {
                     {p.picked_up_at ? new Date(p.picked_up_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'received' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {p.status === 'received' ? 'Pendiente' : 'Entregado'}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      p.status === 'received' ? 'bg-amber-100 text-amber-800' :
+                      p.status === 'notified' ? 'bg-blue-100 text-blue-800' :
+                      p.status === 'picked_up' ? 'bg-emerald-100 text-emerald-800' :
+                      p.status === 'returned' ? 'bg-slate-100 text-slate-700' :
+                      p.status === 'expired' ? 'bg-red-100 text-red-800' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>
+                      {
+                        p.status === 'received' ? 'Recibido' :
+                        p.status === 'notified' ? 'Notificado' :
+                        p.status === 'picked_up' ? 'Entregado' :
+                        p.status === 'returned' ? 'Devuelto' :
+                        p.status === 'expired' ? 'Vencido' :
+                        'Estado desconocido'
+                      }
                     </span>
                   </td>
                 </tr>

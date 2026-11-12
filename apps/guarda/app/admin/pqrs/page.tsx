@@ -1,4 +1,6 @@
 'use client';
+
+import { getHouseNumber } from '../../lib/house-number';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -95,7 +97,7 @@ export default function AdminPQRS() {
                     <td className="px-4 py-4"><span className="font-medium text-slate-800">{p.type}</span></td>
                     <td className="px-4 py-4 font-medium text-slate-800">{p.subject}</td>
                     <td className="px-4 py-4 text-xs font-semibold text-[#1E3A5F]">
-                      {(p.units as any)?.towers?.name} - {(p.units as any)?.code}
+                      {(p.units as any)?.towers?.name} - {getHouseNumber((p.units as any)?.code)}
                     </td>
                     {/* DESCRIPCIÓN CON TRUNCATE PARA QUE NO SE DESBORDE */}
                     <td className="px-4 py-4 text-slate-500 max-w-[200px] truncate">{p.description}</td>

@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -7,10 +8,11 @@ import { supabase } from './lib/supabase';
 const MODULES = [
   { id: 'lobby',    label: 'Recibir Paquete',  icon: '📦', color: 'bg-emerald-600' },
   { id: 'retiro',   label: 'Entregar Paquete', icon: '✅', color: 'bg-blue-600' },
+  { id: 'correspondencia', label: 'Correspondencia', icon: '📄', color: 'bg-cyan-700' },
   { id: 'visitas',  label: 'Crear Visita',     icon: '👤', color: 'bg-indigo-600' },
   { id: 'scan',     label: 'Escanear QR',      icon: '📷', color: 'bg-purple-600' },
   { id: 'parking',  label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' },
-  { id: 'admin',    label: 'Central (Admin)',  icon: '🖥️', color: 'bg-slate-800' },
+  { id: 'admin',    label: 'Central (Admin)',  icon: '\u{1F5A5}\uFE0F', color: 'bg-slate-800' },
 ];
 
 export default function GuardaHome() {
@@ -77,7 +79,7 @@ export default function GuardaHome() {
     <div className="min-h-screen bg-slate-100 p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1E3A5F] text-2xl">🛡️</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1E3A5F] text-2xl">{"\u{1F6E1}\uFE0F"}</div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Portho 24 Guarda</h1>
             <p className="text-sm text-slate-500">{user?.email} · Turno Activo</p>

@@ -1,7 +1,10 @@
 'use client';
+
+import { getHouseNumber } from '../../lib/house-number';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-
+
+import EvidenceImage from '../../components/EvidenceImage';
 export default function AdminVisitas() {
   const [visitas, setVisitas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +86,7 @@ export default function AdminVisitas() {
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td className="px-6 py-3">
                     {v.photo_url ? (
-                      <img src={v.photo_url} alt="Visitante" className="h-10 w-10 object-cover rounded-full shadow-sm" />
+                      <EvidenceImage src={v.photo_url} alt="Visitante" className="h-10 w-10 object-cover rounded-full shadow-sm" />
                     ) : (
                       <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">N/A</div>
                     )}
@@ -91,7 +94,7 @@ export default function AdminVisitas() {
                   <td className="px-6 py-3 font-semibold text-slate-900">{(v.visitors as any)?.full_name}</td>
                   <td className="px-6 py-3 text-slate-600">{(v.visitors as any)?.doc_number}</td>
                   <td className="px-6 py-3 text-xs font-semibold text-[#1E3A5F]">
-                    {(v.units as any)?.towers?.name} - {(v.units as any)?.code}
+                    {(v.units as any)?.towers?.name} - {getHouseNumber((v.units as any)?.code)}
                   </td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${

@@ -1,9 +1,12 @@
 'use client';
+
+import { getHouseNumber } from '../lib/house-number';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
-
+
+import { uploadEvidence } from '../lib/evidencias-client';
 export default function ScanPage() {
   const router = useRouter();
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -43,7 +46,7 @@ export default function ScanPage() {
             html5QrCode.stop();
             setIsScanning(false);
 
-            // 🔥 CONSULTA CORREGIDA: Traemos units(code, towers(name))
+            // [INFO] CONSULTA CORREGIDA: Traemos units(code, towers(name))
             const { data, error } = await supabase
               .from('visits')
               .select('id, status, expires_at, created_at, visitors(full_name, doc_number), units(id, code, towers(id, name, tenant_id))')
@@ -110,29 +113,33 @@ export default function ScanPage() {
     try {
       const tenantId = (visitaEncontrada.units as any).towers.tenant_id;
 
-      // 1. Subir foto del visitante
-      const fileExtVis = fotoVisitante.name.split('.').pop();
-      const fileNameVis = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVis}`;
-      const { error: errVis } = await supabase.storage.from('evidences').upload(fileNameVis, fotoVisitante, { contentType: fotoVisitante.type });
-      if (errVis) throw errVis;
-      const { data: { publicUrl: urlVis } } = supabase.storage.from('evidences').getPublicUrl(fileNameVis);
+      const urlVis = await uploadEvidence(fotoVisitante, 'visitante');
 
       // 2. Actualizar la visita
-      await supabase.from('visits').update({ 
-        status: 'checked_in', 
-        check_in_at: new Date().toISOString(),
-        photo_url: urlVis
-      }).eq('id', visitaEncontrada.id);
+      const { data: visitaActualizada, error: visitUpdateError } = await supabase
+        .from('visits')
+        .update({
+          status: 'checked_in',
+          check_in_at: new Date().toISOString(),
+          photo_url: urlVis
+        })
+        .eq('id', visitaEncontrada.id)
+        .eq('status', 'authorized')
+        .gt('expires_at', new Date().toISOString())
+        .select('id')
+        .maybeSingle();
+
+      if (visitUpdateError) throw visitUpdateError;
+
+      if (!visitaActualizada) {
+        throw new Error('La autorización venció o ya fue utilizada. No se registró el ingreso.');
+      }
 
       // 3. Registrar el vehículo (si aplica)
       if (vieneEnVehiculo && placaVehiculo && fotoVehiculo) {
         
         // Subir foto del vehículo
-        const fileExtVeh = fotoVehiculo.name.split('.').pop();
-        const fileNameVeh = `vehiculos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtVeh}`;
-        const { error: errVeh } = await supabase.storage.from('evidences').upload(fileNameVeh, fotoVehiculo, { contentType: fotoVehiculo.type });
-        if (errVeh) throw errVeh;
-        const { data: { publicUrl: urlVeh } } = supabase.storage.from('evidences').getPublicUrl(fileNameVeh);
+        const urlVeh = await uploadEvidence(fotoVehiculo, 'vehiculo');
 
         // Buscar o crear vehículo (sin .single() para evitar el error 406)
         let { data: vehiculosEncontrados } = await supabase
@@ -164,8 +171,8 @@ export default function ScanPage() {
             status: 'active',
             check_in_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            // 🔥 CORRECCIÓN: Guardamos el código de la casa (ej. 125)
-            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: Casa ${(visitaEncontrada.units as any).code}`,
+            // [INFO] CORRECCIÓN: Guardamos el código de la casa (ej. 125)
+            notes: `Conductor: ${(visitaEncontrada.visitors as any).full_name} - Destino: Casa ${getHouseNumber((visitaEncontrada.units as any).code)}`,
             photo_url: urlVeh
           });
 
@@ -201,7 +208,7 @@ export default function ScanPage() {
       <header className="absolute top-0 left-0 w-full p-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">📷 Escanear QR</h1>
         <button onClick={() => router.push('/')} className="rounded-full bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20">
-          ← Volver
+          ← Volver
         </button>
       </header>
 
@@ -220,7 +227,7 @@ export default function ScanPage() {
 
         {!scanResult && errorMsg && !visitaEncontrada && (
           <div className="absolute inset-0 bg-red-600 flex flex-col items-center justify-center p-6 text-center text-white z-50">
-            <span className="text-6xl mb-4">❌</span>
+            <span className="text-6xl mb-4">ERROR</span>
             <h2 className="text-2xl font-bold mb-2">Acceso Denegado</h2>
             <p className="text-red-100 mb-8">{errorMsg}</p>
             <button onClick={resetScanner} className="rounded-xl bg-white text-red-700 px-6 py-3 font-bold w-full">
@@ -234,7 +241,7 @@ export default function ScanPage() {
             <div className="text-center">
               <h2 className="text-xl font-bold text-slate-800">Visita Válida</h2>
               <p className="text-sm text-slate-500 mt-1">
-                {(visitaEncontrada.visitors as any).full_name} → {(visitaEncontrada.units as any).towers.name} - {(visitaEncontrada.units as any).code}
+                {(visitaEncontrada.visitors as any).full_name} ←’ {(visitaEncontrada.units as any).towers.name} - {(visitaEncontrada.units as any).code}
               </p>
             </div>
 

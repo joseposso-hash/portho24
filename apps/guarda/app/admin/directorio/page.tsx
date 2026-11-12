@@ -1,6 +1,6 @@
-
 'use client';
 
+import { getHouseNumber } from '../../lib/house-number';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -79,7 +79,7 @@ export default function AdminDirectorio() {
                 is_active: residente.is_active,
               })),
           }))
-          .sort((a, b) => Number(a.code) - Number(b.code));
+          .sort((a, b) => Number(getHouseNumber(a.code)) - Number(getHouseNumber(b.code)));
 
         setViviendas(resultado);
       } catch (err: any) {
@@ -98,7 +98,7 @@ export default function AdminDirectorio() {
 
     return viviendas.filter((vivienda) => {
       const coincideBusqueda =
-        vivienda.code.toLowerCase().includes(texto) ||
+        getHouseNumber(vivienda.code).includes(texto) ||
         vivienda.residentes.some(
           (r) =>
             r.full_name.toLowerCase().includes(texto) ||
@@ -227,7 +227,7 @@ export default function AdminDirectorio() {
                   {viviendasFiltradas.map((vivienda) => (
                     <tr key={vivienda.id} className="hover:bg-slate-50">
                       <td className="px-5 py-4 font-bold text-slate-800">
-                        Casa {vivienda.code}
+                        Casa {getHouseNumber(vivienda.code)}
                       </td>
 
                       <td className="px-5 py-4 text-slate-700">
@@ -272,3 +272,4 @@ export default function AdminDirectorio() {
     </div>
   );
 }
+

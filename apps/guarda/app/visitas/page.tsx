@@ -1,8 +1,11 @@
 'use client';
+
+import { getHouseNumber } from '../lib/house-number';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-
+
+import { uploadEvidence } from '../lib/evidencias-client';
 export default function VisitasPage() {
   const router = useRouter();
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -53,15 +56,9 @@ export default function VisitasPage() {
 
       if (errVis) throw errVis;
 
-      let urlVisitante = null;
+      let urlVisitante: string | null = null;
       if (fotoVisitante) {
-        const fileExt = fotoVisitante.name.split('.').pop();
-        const fileName = `visitantes/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const { error: upErr } = await supabase.storage.from('evidences').upload(fileName, fotoVisitante, { contentType: fotoVisitante.type });
-        if (!upErr) {
-          const { data: { publicUrl } } = supabase.storage.from('evidences').getPublicUrl(fileName);
-          urlVisitante = publicUrl;
-        }
+        urlVisitante = await uploadEvidence(fotoVisitante, 'visitante');
       }
 
       const { data: visita, error: errVisita } = await supabase
@@ -96,7 +93,7 @@ export default function VisitasPage() {
     <div className="min-h-screen bg-slate-100 p-6 flex flex-col items-center">
       <header className="w-full max-w-lg mb-8 flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-slate-900">👤 Visita No Anunciada</h1></div>
-        <button onClick={() => router.push('/')} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">← Volver</button>
+        <button onClick={() => router.push('/')} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">← Volver</button>
       </header>
 
       <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-lg">
