@@ -51,7 +51,7 @@ export default function AdminVisitas() {
 
         const tenantId = profile.tenant_id;
 
-        let model: HousingModel = 'units';
+        let model: HousingModel = 'houses';
 
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
