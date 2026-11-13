@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { formatUnitLabel, getHousingConfig, HousingModel } from '../../lib/tenant-config';
+import { formatUnitLabel, getHousingConfig, type HousingModel } from '../../lib/tenant-config';
 
 type Unit = { id: string; code: string; tower_id: string; tower_name?: string };
 
@@ -122,13 +122,13 @@ export default function AdminResidentes() {
       const data = await request('GET');
 
       setResidents(data.residents || []);
+      setHousingModel((data.housingModel || 'units') as HousingModel);
 
       setUnits(
-        (data.units || []).sort((a: Unit, b: Unit) => {
-          const numberA = Number(a.code.replace(/\D/g, '')) || 0;
-          const numberB = Number(b.code.replace(/\D/g, '')) || 0;
-          return numberA - numberB;
-        })
+        (data.units || []).sort((a: Unit, b: Unit) =>
+          (a.tower_name || '').localeCompare(b.tower_name || '', 'es', { numeric: true }) ||
+          String(a.code).localeCompare(String(b.code), 'es', { numeric: true })
+        )
       );
 
       setHistory(data.history || []);
