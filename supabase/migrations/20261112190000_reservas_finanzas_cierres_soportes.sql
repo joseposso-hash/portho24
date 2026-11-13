@@ -197,7 +197,7 @@ BEGIN
 
       IF NEW.movement_type = 'charge_reversal' THEN
         IF v_original.movement_type <> 'charge'
-           OR v_reserva.status <> 'cancelled'
+           OR v_reserva.status NOT IN ('cancelled','rejected')
            OR NEW.amount <> v_original.amount THEN
           RAISE EXCEPTION 'El reverso debe anular el cargo original de una reserva cancelada';
         END IF;
@@ -310,7 +310,7 @@ BEGIN
   FROM public.reserva_movimientos_financieros
   WHERE reserva_id = v_reserva_id;
 
-  SELECT status = 'cancelled' INTO v_cancelled
+  SELECT status IN ('cancelled','rejected') INTO v_cancelled
   FROM public.reservas WHERE id = v_reserva_id;
 
   PERFORM set_config('portho24.reserva_financial_write', 'on', true);
@@ -369,7 +369,7 @@ AS $$
 DECLARE
   v_charge public.reserva_movimientos_financieros%ROWTYPE;
 BEGIN
-  IF NEW.status = 'cancelled' AND OLD.status IS DISTINCT FROM 'cancelled' THEN
+  IF NEW.status IN ('cancelled','rejected') AND OLD.status IS DISTINCT FROM NEW.status THEN
     UPDATE public.reserva_movimientos_financieros
     SET verification_status = 'rejected',
         verified_by = auth.uid(),
