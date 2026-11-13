@@ -72,7 +72,7 @@ export default function AdminReservas() {
       alert('No fue posible abrir el soporte: ' + (error?.message || 'URL no disponible'));
       return;
     }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    window.location.assign(data.signedUrl);
   }
 
   async function registrarDevolucion(reserva: any, pago: any) {
