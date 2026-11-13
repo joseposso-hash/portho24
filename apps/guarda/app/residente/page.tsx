@@ -1761,7 +1761,7 @@ export default function ResidentePage() {
                         Estado financiero: {r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Pago parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}
                         {' · Modalidad: '}{r.payment_mode === 'prepaid' ? 'Anticipado' : r.payment_mode === 'account' ? 'Cargo a cuenta' : 'Sin costo'}
                       </p>
-                      {r.status === 'cancelled' && r.refund_status && r.refund_status !== 'not_applicable' && (
+                      {['cancelled','rejected'].includes(r.status) && r.refund_status && r.refund_status !== 'not_applicable' && (
                         <p className="mt-1 text-xs font-medium text-blue-700">
                           Devolución: {r.refund_status === 'pending' ? 'Pendiente de gestión administrativa' : r.refund_status === 'partial' ? 'Parcial' : 'Completada'}
                         </p>
