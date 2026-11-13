@@ -90,14 +90,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq('id', user.id)
         .maybeSingle();
 
-      if (profile) {
-        setNombreAdmin(profile.full_name || 'Administrador');
+      if (!profile || profile.role !== 'admin' || profile.is_active === false) {\n        router.replace(profile?.role === 'resident' ? '/residente' : profile?.role === 'guard' ? '/guarda' : '/login');\n        return;\n      }\n\n      if (profile) {\n        setNombreAdmin(profile.full_name || 'Administrador');
         const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
         if (tenantData?.name) setNombreConjunto('Pinar de la Fontana E3');
       }
     }
-    cargarPerfil();
-  }, []);
+    cargarPerfil();\n  }, [router]);
 
   useEffect(() => {
     if (window.innerWidth > 768) setIsOpen(true);
