@@ -40,7 +40,22 @@ export default function LoginPage() {
         return;
       }
 
-      if (!profile || profile.is_active === false) {\n        await supabase.auth.signOut();\n        setErr('Tu cuenta no está activa. Contacta al administrador.');\n        setLoading(false);\n        return;\n      }\n\n      const destinos: Record<string, string> = { guard: '/guarda', resident: '/residente', admin: '/admin' };\n      const destino = destinos[profile.role];\n      if (!destino) {\n        await supabase.auth.signOut();\n        setErr('Tu perfil no tiene un acceso habilitado.');\n        setLoading(false);\n        return;\n      }\n      router.replace(destino);
+      if (!profile || profile.is_active === false) {
+        await supabase.auth.signOut();
+        setErr('Tu cuenta no está activa. Contacta al administrador.');
+        setLoading(false);
+        return;
+      }
+
+      const destinos: Record<string, string> = { guard: '/guarda', resident: '/residente', admin: '/admin' };
+      const destino = destinos[profile.role];
+      if (!destino) {
+        await supabase.auth.signOut();
+        setErr('Tu perfil no tiene un acceso habilitado.');
+        setLoading(false);
+        return;
+      }
+      router.replace(destino);
     }
 
     setLoading(false);
