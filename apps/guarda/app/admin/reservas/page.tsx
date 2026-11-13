@@ -7,9 +7,6 @@ import { supabase } from '../../lib/supabase';
 export default function AdminReservas() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [procesandoPago, setProcesandoPago] = useState<string | null>(null);
-  const [procesandoReserva, setProcesandoReserva] = useState<string | null>(null);
-  const [mensajeAccion, setMensajeAccion] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
 
   useEffect(() => {
     cargarReservas();
@@ -26,7 +23,7 @@ export default function AdminReservas() {
 
     const { data } = await supabase
       .from('reservas')
-      .select('*, areas_comunes(name, icon), units(code, towers(name)), reserva_movimientos_financieros(*)')
+      .select('*, areas_comunes(name, icon), units(code, towers(name))')
       .eq('tenant_id', profile.tenant_id) // <-- FILTRO
       .order('date', { ascending: false });
     if (data) setReservas(data);
@@ -34,217 +31,18 @@ export default function AdminReservas() {
   }
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
-    if (procesandoReserva || procesandoPago) return;
-
-    let motivo: string | null = null;
-    if (nuevoEstado === 'rejected' || nuevoEstado === 'cancelled') {
-      motivo = prompt(nuevoEstado === 'cancelled'
-        ? 'Indica el motivo de la cancelación:'
-        : 'Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
+    let motivo = null;
+    if (nuevoEstado === 'rejected') {
+      motivo = prompt('Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
       if (motivo === null) return;
       if (motivo.trim() === '') {
-        setMensajeAccion({ tipo: 'error', texto: 'Debes escribir un motivo para rechazar o cancelar la reserva.' });
+        alert('Debes escribir un motivo para rechazar la reserva.');
         return;
       }
     }
 
-    setProcesandoReserva(id);
-    setMensajeAccion(null);
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) throw new Error('No fue posible validar la sesión: ' + authError.message);
-      if (!authData.user) throw new Error('La sesión expiró. Ingresa nuevamente como administrador.');
-
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('tenant_id, role, is_active')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (profileError) throw new Error('No fue posible validar el perfil: ' + profileError.message);
-      if (!profile || !profile.is_active || profile.role !== 'admin' || !profile.tenant_id) {
-        throw new Error('La sesión no corresponde a un administrador activo del conjunto.');
-      }
-
-      const cambios: { status: string; admin_notes?: string } = { status: nuevoEstado };
-      if (motivo !== null) cambios.admin_notes = motivo.trim();
-
-      const { data: actualizado, error } = await supabase
-        .from('reservas')
-        .update(cambios)
-        .eq('id', id)
-        .eq('tenant_id', profile.tenant_id)
-        .select('id, status')
-        .maybeSingle();
-
-      if (error) {
-        throw new Error('Supabase rechazó el cambio de estado: ' + error.message +
-          (error.code ? ' [Código: ' + error.code + ']' : '') +
-          (error.details ? ' Detalle: ' + error.details : '') +
-          (error.hint ? ' Ayuda: ' + error.hint : ''));
-      }
-
-      if (!actualizado) {
-        const { data: actual, error: consultaError } = await supabase
-          .from('reservas')
-          .select('id, tenant_id, status')
-          .eq('id', id)
-          .maybeSingle();
-
-        if (consultaError) throw new Error('No se pudo comprobar el estado actual: ' + consultaError.message);
-        if (!actual) throw new Error('No se modificó ninguna reserva. No está visible para esta sesión o RLS bloqueó la operación.');
-        if (actual.tenant_id !== profile.tenant_id) throw new Error('La reserva pertenece a otro conjunto.');
-        throw new Error('Supabase no confirmó ninguna fila modificada. Estado actual: ' + actual.status + '. Revisa la política UPDATE de reservas.');
-      }
-
-      setMensajeAccion({ tipo: 'success', texto: 'Reserva ' +
-        (nuevoEstado === 'approved' ? 'aprobada' : nuevoEstado === 'rejected' ? 'rechazada' : 'cancelada') +
-        ' correctamente.' });
-      await cargarReservas();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMensajeAccion({ tipo: 'error', texto: 'No fue posible actualizar la reserva: ' + message });
-    } finally {
-      setProcesandoReserva(null);
-    }
-  }
-
-  async function validarPago(id: string, aprobado: boolean) {
-    if (procesandoPago) return;
-    setProcesandoPago(id);
-
-    try {
-      // Validar la sesión y el perfil antes de intentar la operación protegida por RLS.
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) throw new Error('No fue posible validar la sesión: ' + authError.message);
-      if (!authData.user) {
-        throw new Error('La sesión expiró. Ingresa nuevamente como administrador.');
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('tenant_id, role, is_active')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        throw new Error('No fue posible validar el perfil administrador: ' + profileError.message);
-      }
-      if (!profile || !profile.is_active || profile.role !== 'admin' || !profile.tenant_id) {
-        throw new Error('La sesión actual no corresponde a un administrador activo del conjunto. Cierra sesión e ingresa con la cuenta administradora.');
-      }
-
-      const nuevoEstado = aprobado ? 'confirmed' : 'rejected';
-      const { data: actualizado, error } = await supabase
-        .from('reserva_movimientos_financieros')
-        .update({ verification_status: nuevoEstado })
-        .eq('id', id)
-        .eq('tenant_id', profile.tenant_id)
-        .eq('movement_type', 'payment')
-        .eq('verification_status', 'pending')
-        .select('id, verification_status, verified_by, verified_at')
-        .maybeSingle();
-
-      if (error) {
-        throw new Error(
-          'Supabase rechazó la validación del pago. ' +
-          error.message +
-          (error.code ? ' [Código: ' + error.code + ']' : '') +
-          (error.details ? ' Detalle: ' + error.details : '') +
-          (error.hint ? ' Ayuda: ' + error.hint : '')
-        );
-      }
-
-      if (!actualizado) {
-        const { data: movimiento, error: consultaError } = await supabase
-          .from('reserva_movimientos_financieros')
-          .select('id, tenant_id, movement_type, verification_status')
-          .eq('id', id)
-          .maybeSingle();
-
-        if (consultaError) {
-          throw new Error('No se pudo verificar el resultado de la operación: ' + consultaError.message);
-        }
-        if (!movimiento) {
-          throw new Error('No se modificó ningún pago. El movimiento no es visible para esta sesión o la política RLS está bloqueando la operación.');
-        }
-        if (movimiento.tenant_id !== profile.tenant_id) {
-          throw new Error('El pago pertenece a otro conjunto; no se realizó ningún cambio.');
-        }
-        if (movimiento.verification_status !== 'pending') {
-          throw new Error('Este pago ya fue procesado. Estado actual: ' + movimiento.verification_status + '. Actualiza la página.');
-        }
-        throw new Error('Supabase no confirmó ninguna fila modificada. El pago continúa pendiente; revisa los permisos UPDATE de la sesión administradora.');
-      }
-
-      if (actualizado.verification_status !== nuevoEstado || !actualizado.verified_by || !actualizado.verified_at) {
-        throw new Error('La base de datos no devolvió la confirmación completa del movimiento. Verifica el estado antes de continuar.');
-      }
-
-      setMensajeAccion({ tipo: 'success', texto: aprobado ? 'Pago confirmado correctamente.' : 'Pago rechazado correctamente.' });
-      await cargarReservas();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMensajeAccion({ tipo: 'error', texto: 'No fue posible ' + (aprobado ? 'confirmar' : 'rechazar') + ' el pago: ' + message });
-    } finally {
-      setProcesandoPago(null);
-    }
-  }
-
-  async function abrirSoporte(path: string) {
-    const { data, error } = await supabase.storage
-      .from('reserva-soportes')
-      .createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) {
-      alert('No fue posible abrir el soporte: ' + (error?.message || 'URL no disponible'));
-      return;
-    }
-    window.location.assign(data.signedUrl);
-  }
-
-  async function registrarDevolucion(reserva: any, pago: any) {
-    const movimientos = Array.isArray(reserva.reserva_movimientos_financieros)
-      ? reserva.reserva_movimientos_financieros
-      : [];
-    const yaDevuelto = movimientos
-      .filter((m: any) => m.movement_type === 'refund' && m.reversal_of_id === pago.id && m.verification_status === 'confirmed')
-      .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
-    const disponible = Math.max(0, Number(pago.amount) - yaDevuelto);
-    if (disponible <= 0) {
-      alert('Este pago ya fue devuelto en su totalidad.');
-      return;
-    }
-
-    const valor = prompt(`Valor a devolver. Máximo disponible: ${disponible.toLocaleString('es-CO')} ${reserva.currency || 'COP'}`, String(disponible));
-    if (valor === null) return;
-    const amount = Number(valor);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > disponible) {
-      alert('Ingresa un valor válido que no supere el saldo del pago original.');
-      return;
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert('La sesión expiró. Ingresa nuevamente.');
-      return;
-    }
-
-    const { error } = await supabase.from('reserva_movimientos_financieros').insert({
-      tenant_id: reserva.tenant_id,
-      reserva_id: reserva.id,
-      movement_type: 'refund',
-      amount,
-      reversal_of_id: pago.id,
-      verification_status: 'confirmed',
-      recorded_by: user.id,
-      notes: 'Devolución registrada por administración',
-    });
-
-    if (error) {
-      alert('No fue posible registrar la devolución: ' + error.message);
-      return;
-    }
-    await cargarReservas();
+    await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
+    cargarReservas();
   }
 
   return (
@@ -252,13 +50,6 @@ export default function AdminReservas() {
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
         <h1 className="text-xl font-bold text-slate-800">Gestión de Reservas</h1>
       </header>
-
-      {mensajeAccion && (
-        <div role="status" aria-live="polite" className={`mx-8 mt-4 rounded-lg border px-4 py-3 text-sm font-medium ${mensajeAccion.tipo === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
-          {mensajeAccion.texto}
-          <button type="button" onClick={() => setMensajeAccion(null)} className="ml-3 font-bold underline">Cerrar</button>
-        </div>
-      )}
 
       <div className="p-8 max-w-6xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -270,15 +61,14 @@ export default function AdminReservas() {
                 <th className="px-6 py-4">Fecha / Hora</th>
                 <th className="px-6 py-4">Notas</th>
                 <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Finanzas</th>
                 <th className="px-6 py-4">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando...</td></tr>
               ) : reservas.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay reservas registradas.</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay reservas registradas.</td></tr>
               ) : (
                 reservas.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
@@ -302,58 +92,15 @@ export default function AdminReservas() {
                         r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 
                         'bg-red-100 text-red-800'
                       }`}>
-                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : r.status === 'cancelled' ? 'Cancelada' : 'Rechazada'}
+                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
                       </span>
-                    </td>
-                    <td className="px-6 py-3 text-xs">
-                      <p className="font-semibold text-slate-800">{Number(r.amount_due || 0).toLocaleString('es-CO')} {r.currency || 'COP'}</p>
-                      <p className="text-slate-500">Pagado: {Number(r.amount_paid || 0).toLocaleString('es-CO')}</p>
-                      <p className="text-slate-500">Saldo: {(r.account_charge_status === 'reversed' ? 0 : Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0))).toLocaleString('es-CO')}</p>
-                      {r.account_charge_status === 'reversed' && <p className="text-emerald-700">Cargo a cuenta reversado</p>}
-                      {r.refund_status && r.refund_status !== 'not_applicable' && <p className="text-blue-700">Devolución: {r.refund_status === 'pending' ? 'Pendiente' : r.refund_status === 'partial' ? 'Parcial' : 'Completada'}</p>}
-                      {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.filter((m: any) => m.support_path).map((m: any) => (
-                        <button key={m.id} onClick={() => abrirSoporte(m.support_path)} className="mt-1 block text-blue-700 underline">Ver soporte del pago</button>
-                      ))}
-                      <p className="mt-1 font-medium">{r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}</p>
-                      {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.filter((m: any) => m.verification_status === 'pending').map((m: any) => (
-                        <div key={m.id} className="mt-2 rounded-lg bg-amber-50 p-2">
-                          <p className="mb-1">Pago reportado: {Number(m.amount).toLocaleString('es-CO')} · {m.payment_method || 'Medio no indicado'}</p>
-                          {m.reference && <p>Ref: {m.reference}</p>}
-                          {m.support_path && <button onClick={() => abrirSoporte(m.support_path)} className="mt-1 text-blue-700 underline">Ver soporte</button>}
-                          <div className="mt-2 flex gap-2">
-                            <button type="button" disabled={procesandoPago !== null} onClick={() => validarPago(m.id, true)} className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">{procesandoPago === m.id ? 'Confirmando...' : 'Confirmar'}</button>
-                            <button type="button" disabled={procesandoPago !== null} onClick={() => validarPago(m.id, false)} className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50">{procesandoPago === m.id ? 'Procesando...' : 'Rechazar'}</button>
-                          </div>
-                        </div>
-                      ))}
                     </td>
                     <td className="px-6 py-3 flex gap-2">
                       {r.status === 'pending' && (
                         <>
-                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Aprobar'}</button>
-                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Rechazar'}</button>
-                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Cancelar'}</button>
+                          <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
+                          <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
                         </>
-                      )}
-                      {r.status === 'approved' && (
-                        <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium disabled:opacity-50">{procesandoReserva === r.id ? 'Procesando...' : 'Cancelar'}</button>
-                      )}
-                      {['cancelled','rejected'].includes(r.status) && (
-                        <div className="min-w-36 space-y-2">
-                          <p className="font-semibold text-slate-700">Devoluciones: {r.refund_status === 'refunded' ? 'Completadas' : r.refund_status === 'partial' ? 'Parciales' : r.refund_status === 'pending' ? 'Pendientes' : 'No aplica'}</p>
-                          {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros
-                            .filter((m: any) => m.movement_type === 'payment' && m.verification_status === 'confirmed')
-                            .map((pago: any) => {
-                              const devuelto = r.reserva_movimientos_financieros
-                                .filter((m: any) => m.movement_type === 'refund' && m.reversal_of_id === pago.id && m.verification_status === 'confirmed')
-                                .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
-                              return Number(pago.amount) > devuelto ? (
-                                <button key={pago.id} onClick={() => registrarDevolucion(r, pago)} className="block text-xs rounded bg-blue-50 px-2 py-1 text-blue-800">
-                                  Devolver saldo ({(Number(pago.amount) - devuelto).toLocaleString('es-CO')})
-                                </button>
-                              ) : null;
-                            })}
-                        </div>
                       )}
                     </td>
                   </tr>
