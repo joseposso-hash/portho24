@@ -202,7 +202,7 @@ export default function CorrespondenciaPage() {
     setSaving(true);
     try {
       // Los documentos tipo "other" pueden recibirse varias veces
-      // para una misma casa y período.
+      // para una misma vivienda y período.
       const documentsToValidate = documents.filter(
         (type) => type !== 'other'
       );
@@ -269,7 +269,7 @@ export default function CorrespondenciaPage() {
     setSearched(false);
 
     if (!deliveryUnit) {
-      setError('Escribe un número de casa válido.');
+      setError('Selecciona la vivienda de destino.');
       return;
     }
 
@@ -448,8 +448,7 @@ export default function CorrespondenciaPage() {
                 <select
                   value={receivingUnitId}
                   onChange={(e) => setReceivingUnitId(e.target.value)}
-                  
-                  className={inputClass}
+                          className={inputClass}
                   required
                 >
                   <option value="">Seleccionar {housing.article}</option>
