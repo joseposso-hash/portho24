@@ -62,14 +62,15 @@ BEGIN
      AND NEW.payer_user_id IS NOT NULL
      AND NEW.unit_id IS NOT NULL
      AND NEW.amount_due > 0
-     AND NEW.charge_authorization_status = 'pending'
-     AND (
-       TG_OP = 'INSERT'
-       OR OLD.charge_authorization_status IS DISTINCT FROM NEW.charge_authorization_status
-       OR OLD.payer_user_id IS DISTINCT FROM NEW.payer_user_id
-       OR OLD.amount_due IS DISTINCT FROM NEW.amount_due
-       OR OLD.payer_type IS DISTINCT FROM NEW.payer_type
-     ) THEN
+     AND NEW.charge_authorization_status = 'pending' THEN
+
+    IF TG_OP = 'UPDATE'
+       AND OLD.charge_authorization_status IS NOT DISTINCT FROM NEW.charge_authorization_status
+       AND OLD.payer_user_id IS NOT DISTINCT FROM NEW.payer_user_id
+       AND OLD.amount_due IS NOT DISTINCT FROM NEW.amount_due
+       AND OLD.payer_type IS NOT DISTINCT FROM NEW.payer_type THEN
+      RETURN NEW;
+    END IF;
 
     INSERT INTO public.resident_notifications (
       tenant_id, unit_id, user_id, item_id,
