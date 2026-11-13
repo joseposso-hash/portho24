@@ -254,7 +254,13 @@ export default function ResidentePage() {
         return;
       }
 
-      if (profile?.role !== 'resident' || profile.is_active === false) {\n        router.replace(profile?.role === 'admin' ? '/admin' : profile?.role === 'guard' ? '/guarda' : '/login');\n        return;\n      }\n\n      if (!profile || !profile.units) {\n        setMiUnidad(null);
+      if (profile?.role !== 'resident' || profile.is_active === false) {
+        router.replace(profile?.role === 'admin' ? '/admin' : profile?.role === 'guard' ? '/guarda' : '/login');
+        return;
+      }
+
+      if (!profile || !profile.units) {
+        setMiUnidad(null);
         return;
       }
 
