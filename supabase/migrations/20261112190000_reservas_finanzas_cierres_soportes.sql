@@ -80,6 +80,17 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS reserva_soportes_delete_own ON storage.objects;
+CREATE POLICY reserva_soportes_delete_own
+ON storage.objects
+FOR DELETE TO authenticated
+USING (
+  bucket_id = 'reserva-soportes'
+  AND split_part(name, '/', 1) = (SELECT public.current_user_tenant_id())::text
+  AND split_part(name, '/', 3) = (SELECT auth.uid())::text
+  AND (SELECT public.is_tenant_resident())
+);
+
 DROP POLICY IF EXISTS reserva_soportes_select_scoped ON storage.objects;
 CREATE POLICY reserva_soportes_select_scoped
 ON storage.objects
@@ -436,7 +447,7 @@ WITH CHECK (
 );
 
 -- La app sube objetos privados; no se habilita lectura publica, update ni delete.
-GRANT SELECT, INSERT ON storage.objects TO authenticated;
+GRANT SELECT, INSERT, DELETE ON storage.objects TO authenticated;
 
 COMMIT;
 
