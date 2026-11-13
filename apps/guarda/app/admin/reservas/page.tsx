@@ -8,6 +8,8 @@ export default function AdminReservas() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [procesandoPago, setProcesandoPago] = useState<string | null>(null);
+  const [procesandoReserva, setProcesandoReserva] = useState<string | null>(null);
+  const [mensajeAccion, setMensajeAccion] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
 
   useEffect(() => {
     cargarReservas();
@@ -32,24 +34,79 @@ export default function AdminReservas() {
   }
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
-    let motivo = null;
+    if (procesandoReserva || procesandoPago) return;
+
+    let motivo: string | null = null;
     if (nuevoEstado === 'rejected' || nuevoEstado === 'cancelled') {
       motivo = prompt(nuevoEstado === 'cancelled'
         ? 'Indica el motivo de la cancelación:'
         : 'Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
       if (motivo === null) return;
       if (motivo.trim() === '') {
-        alert('Debes escribir un motivo para rechazar la reserva.');
+        setMensajeAccion({ tipo: 'error', texto: 'Debes escribir un motivo para rechazar o cancelar la reserva.' });
         return;
       }
     }
 
-    const { error } = await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
-    if (error) {
-      alert('No fue posible actualizar la reserva: ' + error.message);
-      return;
+    setProcesandoReserva(id);
+    setMensajeAccion(null);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('No fue posible validar la sesión: ' + authError.message);
+      if (!authData.user) throw new Error('La sesión expiró. Ingresa nuevamente como administrador.');
+
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('tenant_id, role, is_active')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (profileError) throw new Error('No fue posible validar el perfil: ' + profileError.message);
+      if (!profile || !profile.is_active || profile.role !== 'admin' || !profile.tenant_id) {
+        throw new Error('La sesión no corresponde a un administrador activo del conjunto.');
+      }
+
+      const cambios: { status: string; admin_notes?: string } = { status: nuevoEstado };
+      if (motivo !== null) cambios.admin_notes = motivo.trim();
+
+      const { data: actualizado, error } = await supabase
+        .from('reservas')
+        .update(cambios)
+        .eq('id', id)
+        .eq('tenant_id', profile.tenant_id)
+        .select('id, status')
+        .maybeSingle();
+
+      if (error) {
+        throw new Error('Supabase rechazó el cambio de estado: ' + error.message +
+          (error.code ? ' [Código: ' + error.code + ']' : '') +
+          (error.details ? ' Detalle: ' + error.details : '') +
+          (error.hint ? ' Ayuda: ' + error.hint : ''));
+      }
+
+      if (!actualizado) {
+        const { data: actual, error: consultaError } = await supabase
+          .from('reservas')
+          .select('id, tenant_id, status')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (consultaError) throw new Error('No se pudo comprobar el estado actual: ' + consultaError.message);
+        if (!actual) throw new Error('No se modificó ninguna reserva. No está visible para esta sesión o RLS bloqueó la operación.');
+        if (actual.tenant_id !== profile.tenant_id) throw new Error('La reserva pertenece a otro conjunto.');
+        throw new Error('Supabase no confirmó ninguna fila modificada. Estado actual: ' + actual.status + '. Revisa la política UPDATE de reservas.');
+      }
+
+      setMensajeAccion({ tipo: 'success', texto: 'Reserva ' +
+        (nuevoEstado === 'approved' ? 'aprobada' : nuevoEstado === 'rejected' ? 'rechazada' : 'cancelada') +
+        ' correctamente.' });
+      await cargarReservas();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMensajeAccion({ tipo: 'error', texto: 'No fue posible actualizar la reserva: ' + message });
+    } finally {
+      setProcesandoReserva(null);
     }
-    await cargarReservas();
   }
 
   async function validarPago(id: string, aprobado: boolean) {
@@ -61,8 +118,7 @@ export default function AdminReservas() {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw new Error('No fue posible validar la sesión: ' + authError.message);
       if (!authData.user) {
-        alert('La sesión expiró. Ingresa nuevamente como administrador.');
-        return;
+        throw new Error('La sesión expiró. Ingresa nuevamente como administrador.');
       }
 
       const { data: profile, error: profileError } = await supabase
@@ -75,8 +131,7 @@ export default function AdminReservas() {
         throw new Error('No fue posible validar el perfil administrador: ' + profileError.message);
       }
       if (!profile || !profile.is_active || profile.role !== 'admin' || !profile.tenant_id) {
-        alert('La sesión actual no corresponde a un administrador activo del conjunto. Cierra sesión e ingresa con la cuenta administradora.');
-        return;
+        throw new Error('La sesión actual no corresponde a un administrador activo del conjunto. Cierra sesión e ingresa con la cuenta administradora.');
       }
 
       const nuevoEstado = aprobado ? 'confirmed' : 'rejected';
@@ -126,11 +181,11 @@ export default function AdminReservas() {
         throw new Error('La base de datos no devolvió la confirmación completa del movimiento. Verifica el estado antes de continuar.');
       }
 
+      setMensajeAccion({ tipo: 'success', texto: aprobado ? 'Pago confirmado correctamente.' : 'Pago rechazado correctamente.' });
       await cargarReservas();
-      alert(aprobado ? 'Pago confirmado correctamente.' : 'Pago rechazado correctamente.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      alert('No fue posible ' + (aprobado ? 'confirmar' : 'rechazar') + ' el pago:\n' + message);
+      setMensajeAccion({ tipo: 'error', texto: 'No fue posible ' + (aprobado ? 'confirmar' : 'rechazar') + ' el pago: ' + message });
     } finally {
       setProcesandoPago(null);
     }
@@ -197,6 +252,13 @@ export default function AdminReservas() {
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
         <h1 className="text-xl font-bold text-slate-800">Gestión de Reservas</h1>
       </header>
+
+      {mensajeAccion && (
+        <div role="status" aria-live="polite" className={\`mx-8 mt-4 rounded-lg border px-4 py-3 text-sm font-medium \${mensajeAccion.tipo === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}\`}>
+          {mensajeAccion.texto}
+          <button type="button" onClick={() => setMensajeAccion(null)} className="ml-3 font-bold underline">Cerrar</button>
+        </div>
+      )}
 
       <div className="p-8 max-w-6xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -268,9 +330,9 @@ export default function AdminReservas() {
                     <td className="px-6 py-3 flex gap-2">
                       {r.status === 'pending' && (
                         <>
-                          <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
-                          <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
-                          <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
+                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Aprobar'}</button>
+                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Rechazar'}</button>
+                          <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">{procesandoReserva === r.id ? 'Procesando...' : 'Cancelar'}</button>
                         </>
                       )}
                       {r.status === 'approved' && (
