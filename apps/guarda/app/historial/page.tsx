@@ -1,7 +1,7 @@
 
 'use client';
 
-import { getHouseNumber } from '../lib/house-number';
+import { formatUnitLabel } from '../lib/tenant-config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
@@ -36,19 +36,19 @@ export default function HistorialPage() {
 
         let qPacks = supabase
           .from('packages')
-          .select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, signature_url, picked_up_by, units(code, towers(name))')
+          .select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, signature_url, picked_up_by, units(code, towers(name, tenants(housing_model)))')
           .order('created_at', { ascending: false })
           .limit(100);
 
         let qVisits = supabase
           .from('visits')
-          .select('*, visitors(full_name, doc_number), units(code, towers(name))')
+          .select('*, visitors(full_name, doc_number), units(code, towers(name, tenants(housing_model)))')
           .order('created_at', { ascending: false })
           .limit(100);
 
         let qCars = supabase
           .from('parking_sessions')
-          .select('*, vehicles(plate)')
+          .select('*, vehicles(plate), units(code, towers(name, tenants(housing_model)))')
           .order('created_at', { ascending: false })
           .limit(100);
 
@@ -169,7 +169,7 @@ export default function HistorialPage() {
     if (matchDest) destino = matchDest[1].trim();
 
     if (destino === 'No especificado' && c.units) {
-      destino = `${(c.units as any)?.towers?.name} - ${getHouseNumber((c.units as any)?.code)}`;
+      destino = formatUnitLabel((c.units as any)?.code, (c.units as any)?.towers?.name, (c.units as any)?.towers?.tenants?.housing_model);
     }
 
     return { conductor, destino };
@@ -274,7 +274,7 @@ export default function HistorialPage() {
                   </td>
 
                   <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">
-                    {(p.units as any)?.towers?.name} - {getHouseNumber((p.units as any)?.code)}
+                    {formatUnitLabel((p.units as any)?.code, (p.units as any)?.towers?.name, (p.units as any)?.towers?.tenants?.housing_model)}
                   </td>
 
                   <td className="px-4 py-2 text-xs text-slate-600">
@@ -353,7 +353,7 @@ export default function HistorialPage() {
                   </td>
 
                   <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
-                    {(v.units as any)?.towers?.name} - {getHouseNumber((v.units as any)?.code)}
+                    {formatUnitLabel((v.units as any)?.code, (v.units as any)?.towers?.name, (v.units as any)?.towers?.tenants?.housing_model)}
                   </td>
 
                   <td className="px-4 py-3">
