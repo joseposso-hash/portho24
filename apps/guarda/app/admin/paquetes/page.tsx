@@ -54,7 +54,7 @@ export default function AdminPaquetes() {
         throw tenantError;
       }
 
-      const model = (tenant?.housing_model || 'units') as HousingModel;
+      const model = (tenant?.housing_model || 'houses') as HousingModel;
 
       setHousingModel(model);
 
