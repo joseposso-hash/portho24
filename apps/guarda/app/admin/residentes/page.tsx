@@ -328,7 +328,7 @@ export default function AdminResidentes() {
     const draft = drafts[resident.id];
 
     if (!draft?.unitId) {
-      setError('Selecciona la casa para registrar el reingreso.');
+      setError('Selecciona la vivienda para registrar el reingreso.');
       return;
     }
 
