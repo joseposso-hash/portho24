@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     const validUnit = await validarCasa(unitId, access.profile.tenant_id);
 
     if (!validUnit) {
-      return respuestaError('La casa no existe o no pertenece a tu conjunto.', 403);
+      return respuestaError('La vivienda no existe o no pertenece a tu conjunto.', 403);
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
@@ -362,7 +362,7 @@ export async function PATCH(request: NextRequest) {
       );
 
       if (!validUnit) {
-        return respuestaError('La casa no pertenece a tu conjunto.', 403);
+        return respuestaError('La vivienda no pertenece a tu conjunto.', 403);
       }
 
       const { data, error } = await supabaseAdmin.rpc(
@@ -519,7 +519,7 @@ export async function PATCH(request: NextRequest) {
       );
 
       if (!validUnit) {
-        return respuestaError('La casa no pertenece a tu conjunto.', 403);
+        return respuestaError('La vivienda no pertenece a tu conjunto.', 403);
       }
 
       const { error } = await supabaseAdmin.rpc(
