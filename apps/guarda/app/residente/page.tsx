@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-
+
 import EvidenceImage from '../components/EvidenceImage';
 const DOCUMENT_LABELS: Record<string, string> = {
   electricity: 'Energía',
@@ -450,6 +450,31 @@ export default function ResidentePage() {
     };
   }, [cargarDatos]);
 
+  const consultarNotificaciones = useCallback(async () => {
+    if (!miTenantId || !miUnidad?.id) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('resident_notifications')
+        .select('id, item_id, notification_type, title, message, read_at, created_at')
+        .eq('tenant_id', miTenantId).eq('unit_id', miUnidad.id).eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(30);
+      if (error) { console.error('Error actualizando notificaciones:', error); return; }
+      setNotificaciones(data || []);
+    } catch (error) {
+      console.error('Error consultando notificaciones:', error);
+    }
+  }, [miTenantId, miUnidad?.id]);
+
+  useEffect(() => {
+    if (!miTenantId || !miUnidad?.id) return;
+    const intervalo = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void consultarNotificaciones();
+    }, 30000);
+    return () => window.clearInterval(intervalo);
+  }, [miTenantId, miUnidad?.id, consultarNotificaciones]);
+
   // Marcar una notificación como leída
   async function marcarComoLeida(id: string) {
     if (!miTenantId) return;
@@ -640,11 +665,72 @@ export default function ResidentePage() {
     (item) => item.status === 'delivered'
   );
 
-  const notificacionesNoLeidas = notificaciones.filter((n) => !n.read_at).length;
-  const notificacionesLeidas = notificaciones.filter((n) => Boolean(n.read_at));
+  const notificacionesCorrespondencia = notificaciones.filter(
+    (n) => n.notification_type === 'correspondence'
+  );
+  const notificacionesNoLeidasCorrespondencia = notificacionesCorrespondencia.filter(
+    (n) => !n.read_at
+  ).length;
+  const notificacionesLeidasCorrespondencia = notificacionesCorrespondencia.filter(
+    (n) => Boolean(n.read_at)
+  );
   const notificacionesVisibles = mostrarNotificacionesLeidas
-    ? notificaciones
-    : notificaciones.filter((n) => !n.read_at);
+    ? notificacionesCorrespondencia
+    : notificacionesCorrespondencia.filter((n) => !n.read_at);
+  const notificacionesNoLeidas = notificaciones.filter((n) => !n.read_at).length;
+
+  const tipoNotificacionPorTab: Record<string, string> = {
+    paquetes: 'package', correspondencia: 'correspondence', parqueadero: 'parking',
+    visitas: 'visit', reservas: 'reservation', pqrs: 'pqrs', muro: 'announcement',
+  };
+  const etiquetaNotificacion: Record<string, string> = {
+    package: 'Paquetería', correspondence: 'Correspondencia', parking: 'Parqueadero',
+    visit: 'Visitas', reservation: 'Reservas', pqrs: 'PQRS', announcement: 'Comunicados',
+  };
+  const tabPorNotificacion: Record<string, typeof tab> = {
+    package: 'paquetes', correspondence: 'correspondencia', parking: 'parqueadero',
+    visit: 'visitas', reservation: 'reservas', pqrs: 'pqrs', announcement: 'muro',
+  };
+  const contarNotificacionesNoLeidas = (tipo: string) =>
+    notificaciones.filter((n) => n.notification_type === tipo && !n.read_at).length;
+
+  function renderNotificacionesModulo(tabActual: typeof tab) {
+    const tipo = tipoNotificacionPorTab[tabActual];
+    if (!tipo) return null;
+    const items = notificaciones.filter((n) => n.notification_type === tipo).slice(0, 8);
+    const pendientes = items.filter((n) => !n.read_at).length;
+
+    return (
+      <section className="mb-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-slate-800">Notificaciones de {etiquetaNotificacion[tipo]}</h3>
+          {pendientes > 0 && <span className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white">{pendientes} nuevas</span>}
+        </div>
+        {items.length === 0 ? (
+          <p className="text-xs text-slate-500">No tienes novedades en este módulo por el momento.</p>
+        ) : (
+          <div className="space-y-2">
+            {items.map((n) => (
+              <article key={n.id} className={`rounded-lg border p-3 ${n.read_at ? 'border-slate-200 bg-white' : 'border-blue-200 bg-white'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{n.title || `Novedad de ${etiquetaNotificacion[tipo]}`}</p>
+                    <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{n.message}</p>
+                    <p className="mt-2 text-[10px] text-slate-400">{formatDateTime(n.created_at)}</p>
+                  </div>
+                  {!n.read_at ? (
+                    <button type="button" onClick={() => void marcarComoLeida(n.id)} disabled={marcandoNotificacion === n.id} className="shrink-0 text-[11px] font-semibold text-blue-700 hover:underline disabled:opacity-50">
+                      {marcandoNotificacion === n.id ? 'Guardando...' : 'Marcar leída'}
+                    </button>
+                  ) : <span className="shrink-0 text-[10px] font-medium text-emerald-700">Leída</span>}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   async function responderCargoParqueadero(sessionId: string, aprobado: boolean) {
     setRespondiendoCargo(sessionId);
@@ -758,6 +844,8 @@ export default function ResidentePage() {
             </button>
           )}
 
+          {tab !== 'inicio' && tab !== 'correspondencia' && renderNotificacionesModulo(tab)}
+
           {/* INICIO - PANEL PRINCIPAL DEL RESIDENTE */}
           {tab === 'inicio' && (
             <section className="space-y-5">
@@ -773,6 +861,33 @@ export default function ResidentePage() {
                 </p>
               </div>
 
+              {notificacionesNoLeidas > 0 && (
+                <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-800">Notificaciones recientes</h3>
+                    <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">{notificacionesNoLeidas} nuevas</span>
+                  </div>
+                  <div className="space-y-2">
+                    {notificaciones.filter((n) => !n.read_at).slice(0, 5).map((n) => (
+                      <article key={n.id} className="rounded-lg border border-blue-100 bg-white p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-blue-700">{etiquetaNotificacion[n.notification_type] || 'Novedad'}</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-800">{n.title}</p>
+                            <p className="mt-1 text-xs text-slate-600">{n.message}</p>
+                            <p className="mt-2 text-[10px] text-slate-400">{formatDateTime(n.created_at)}</p>
+                          </div>
+                          <div className="flex shrink-0 flex-col gap-2 text-right">
+                            <button type="button" onClick={() => setTab(tabPorNotificacion[n.notification_type] || 'inicio')} className="text-[11px] font-semibold text-blue-700 hover:underline">Abrir</button>
+                            <button type="button" onClick={() => void marcarComoLeida(n.id)} disabled={marcandoNotificacion === n.id} className="text-[11px] font-semibold text-slate-500 hover:underline disabled:opacity-50">Marcar leída</button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 {[
                   {
@@ -780,7 +895,7 @@ export default function ResidentePage() {
                     icon: 'package',
                     titulo: 'Paquetes',
                     descripcion: 'Paquetes recibidos',
-                    badge: paquetes.length,
+                    badge: contarNotificacionesNoLeidas('package') || paquetes.length,
                     color: 'bg-blue-50 text-blue-800',
                   },
                   {
@@ -788,7 +903,7 @@ export default function ResidentePage() {
                     icon: 'mail',
                     titulo: 'Correspondencia',
                     descripcion: 'Documentos recibidos',
-                    badge: documentosPendientes.length,
+                    badge: contarNotificacionesNoLeidas('correspondence') || documentosPendientes.length,
                     color: 'bg-amber-50 text-amber-800',
                   },
                   {
@@ -796,7 +911,7 @@ export default function ResidentePage() {
                     icon: 'car',
                     titulo: 'Parqueadero',
                     descripcion: 'Cargos y autorizaciones',
-                    badge: cargosParqueadero.filter(
+                    badge: contarNotificacionesNoLeidas('parking') || cargosParqueadero.filter(
                       (cargo) => cargo.charge_authorization_status === 'pending'
                     ).length,
                     color: 'bg-emerald-50 text-emerald-800',
@@ -806,7 +921,7 @@ export default function ResidentePage() {
                     icon: 'users',
                     titulo: 'Visitas',
                     descripcion: 'Registro y seguimiento',
-                    badge: misVisitas.length,
+                    badge: contarNotificacionesNoLeidas('visit') || misVisitas.length,
                     color: 'bg-violet-50 text-violet-800',
                   },
                   {
@@ -814,7 +929,7 @@ export default function ResidentePage() {
                     icon: 'calendar',
                     titulo: 'Reservas',
                     descripcion: 'Áreas comunes',
-                    badge: misReservas.filter((r) => r.status === 'pending').length,
+                    badge: contarNotificacionesNoLeidas('reservation') || misReservas.filter((r) => r.status === 'pending').length,
                     color: 'bg-cyan-50 text-cyan-800',
                   },
                   {
@@ -822,7 +937,7 @@ export default function ResidentePage() {
                     icon: 'clipboard',
                     titulo: 'PQRS',
                     descripcion: 'Solicitudes y seguimiento',
-                    badge: misPqrs.filter(
+                    badge: contarNotificacionesNoLeidas('pqrs') || misPqrs.filter(
                       (p) => p.status === 'pending' || p.status === 'in_progress'
                     ).length,
                     color: 'bg-orange-50 text-orange-800',
@@ -832,7 +947,7 @@ export default function ResidentePage() {
                     icon: 'megaphone',
                     titulo: 'Comunicados',
                     descripcion: 'Novedades del conjunto',
-                    badge: 0,
+                    badge: contarNotificacionesNoLeidas('announcement'),
                     color: 'bg-indigo-50 text-indigo-800',
                   },
                 ].map((item) => (
@@ -1003,9 +1118,9 @@ export default function ResidentePage() {
                               <section>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="font-bold text-slate-800">Notificaciones</h3>
-                    {notificacionesNoLeidas > 0 && (
+                    {notificacionesNoLeidasCorrespondencia > 0 && (
                       <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded-full">
-                        {notificacionesNoLeidas} sin leer
+                        {notificacionesNoLeidasCorrespondencia} sin leer
                       </span>
                     )}
                   </div>
@@ -1061,7 +1176,7 @@ export default function ResidentePage() {
                     </div>
                   )}
 
-                  {notificacionesLeidas.length > 0 && (
+                  {notificacionesLeidasCorrespondencia.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setMostrarNotificacionesLeidas((actual) => !actual)}
@@ -1069,7 +1184,7 @@ export default function ResidentePage() {
                     >
                       {mostrarNotificacionesLeidas
                         ? 'Ocultar notificaciones leídas'
-                        : `Ver notificaciones leídas (${notificacionesLeidas.length})`}
+                        : `Ver notificaciones leídas (${notificacionesLeidasCorrespondencia.length})`}
                     </button>
                   )}
                 </section>
