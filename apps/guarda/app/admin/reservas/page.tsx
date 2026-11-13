@@ -43,8 +43,12 @@ export default function AdminReservas() {
       }
     }
 
-    await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
-    cargarReservas();
+    const { error } = await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
+    if (error) {
+      alert('No fue posible actualizar la reserva: ' + error.message);
+      return;
+    }
+    await cargarReservas();
   }
 
   async function validarPago(id: string, aprobado: boolean) {
@@ -170,7 +174,12 @@ export default function AdminReservas() {
                     <td className="px-6 py-3 text-xs">
                       <p className="font-semibold text-slate-800">{Number(r.amount_due || 0).toLocaleString('es-CO')} {r.currency || 'COP'}</p>
                       <p className="text-slate-500">Pagado: {Number(r.amount_paid || 0).toLocaleString('es-CO')}</p>
-                      <p className="text-slate-500">Saldo: {Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0)).toLocaleString('es-CO')}</p>
+                      <p className="text-slate-500">Saldo: {(r.account_charge_status === 'reversed' ? 0 : Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0))).toLocaleString('es-CO')}</p>
+                      {r.account_charge_status === 'reversed' && <p className="text-emerald-700">Cargo a cuenta reversado</p>}
+                      {r.refund_status && r.refund_status !== 'not_applicable' && <p className="text-blue-700">Devolución: {r.refund_status === 'pending' ? 'Pendiente' : r.refund_status === 'partial' ? 'Parcial' : 'Completada'}</p>}
+                      {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.filter((m: any) => m.support_path).map((m: any) => (
+                        <button key={m.id} onClick={() => abrirSoporte(m.support_path)} className="mt-1 block text-blue-700 underline">Ver soporte del pago</button>
+                      ))}
                       <p className="mt-1 font-medium">{r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}</p>
                       {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.filter((m: any) => m.verification_status === 'pending').map((m: any) => (
                         <div key={m.id} className="mt-2 rounded-lg bg-amber-50 p-2">
