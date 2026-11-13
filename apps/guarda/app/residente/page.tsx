@@ -616,6 +616,30 @@ export default function ResidentePage() {
       return;
     }
 
+    const supportFile = formData.get('support') as File | null;
+    let supportPath: string | null = null;
+
+    if (supportFile && supportFile.size > 0) {
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(supportFile.type) || supportFile.size > 10 * 1024 * 1024) {
+        alert('El soporte debe ser PDF, JPG o PNG y no superar 10 MB.');
+        setEnviandoPagoId(null);
+        return;
+      }
+
+      const safeName = supportFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      supportPath = `${miTenantId}/${reserva.id}/${user.id}/${crypto.randomUUID()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from('reserva-soportes')
+        .upload(supportPath, supportFile, { contentType: supportFile.type, upsert: false });
+
+      if (uploadError) {
+        alert('No fue posible cargar el soporte: ' + uploadError.message);
+        setEnviandoPagoId(null);
+        return;
+      }
+    }
+
     const { error } = await supabase.from('reserva_movimientos_financieros').insert({
       tenant_id: miTenantId,
       reserva_id: reserva.id,
@@ -623,12 +647,14 @@ export default function ResidentePage() {
       amount,
       payment_method: paymentMethod,
       reference: reference || null,
+      support_path: supportPath,
       notes: notes || null,
       verification_status: 'pending',
       recorded_by: user.id,
     });
 
     if (error) {
+      if (supportPath) await supabase.storage.from('reserva-soportes').remove([supportPath]);
       alert('No fue posible reportar el pago: ' + error.message);
     } else {
       alert('Pago reportado. Quedó pendiente de validación administrativa.');
@@ -1752,6 +1778,10 @@ export default function ResidentePage() {
                             ))}
                           </select>
                           <input name="reference" placeholder="Referencia (opcional)" className="w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                          <label className="block text-xs text-slate-600">
+                            Soporte de pago (PDF, JPG o PNG; máximo 10 MB)
+                            <input name="support" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" className="mt-1 block w-full text-xs" />
+                          </label>
                           <textarea name="notes" rows={2} placeholder="Observaciones (opcional)" className="w-full rounded-lg border border-slate-300 p-2 text-sm" />
                           <button disabled={enviandoPagoId === r.id} className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                             {enviandoPagoId === r.id ? 'Enviando...' : 'Reportar pago'}
