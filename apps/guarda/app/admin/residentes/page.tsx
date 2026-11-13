@@ -949,7 +949,7 @@ export default function AdminResidentes() {
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="p-3">Residente</th>
-                    <th className="p-3">Casa</th>
+                    <th className="p-3">{housing.singular}</th>
                     <th className="p-3">Rol</th>
                     <th className="p-3">Desde</th>
                     <th className="p-3">Hasta</th>
