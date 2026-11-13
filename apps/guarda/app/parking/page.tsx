@@ -28,7 +28,7 @@ function ParkingContent() {
   const unitIdParam = searchParams.get('unit_id');
 
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [housingModel, setHousingModel] = useState<HousingModel>('units');
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
 
@@ -127,7 +127,7 @@ function ParkingContent() {
         const normalized = casaParam.trim().toLowerCase();
         const matches = availableUnits.filter((unit: any) =>
           String(unit.code).toLowerCase() === normalized ||
-          formatUnitLabel(unit.code, unit.towerName, tenant?.housing_model || 'units').toLowerCase() === normalized
+          formatUnitLabel(unit.code, unit.towerName, tenant?.housing_model || 'houses').toLowerCase() === normalized
         );
         if (matches.length === 1) setUnitId(matches[0].id);
       }
