@@ -86,7 +86,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: profile } = await supabase
         .from('users')
-        .select('full_name, tenant_id, tenants(name)')
+        .select('full_name, tenant_id, role, is_active, tenants(name)')
         .eq('id', user.id)
         .maybeSingle();
 
