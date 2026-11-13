@@ -44,7 +44,7 @@ BEGIN
       ADD CONSTRAINT areas_comunes_payment_methods_check
       CHECK (
         payment_methods <@ ARRAY['cash','transfer','card','other']::text[]
-        AND (NOT allow_prepaid OR cardinality(payment_methods) > 0)
+        AND (NOT (allow_prepaid OR allow_account_charge) OR cardinality(payment_methods) > 0)
       );
   END IF;
 END $$;
@@ -296,6 +296,16 @@ BEGIN
          OR NOT ((v_reserva.tariff_snapshot -> 'payment_methods') ? NEW.payment_method) THEN
         RAISE EXCEPTION 'El medio de pago no esta habilitado para esta reserva';
       END IF;
+      SELECT COALESCE(SUM(amount), 0)
+      INTO v_confirmed
+      FROM public.reserva_movimientos_financieros
+      WHERE reserva_id = NEW.reserva_id
+        AND movement_type = 'payment'
+        AND verification_status IN ('pending','confirmed');
+
+      IF v_confirmed + NEW.amount > v_reserva.amount_due THEN
+        RAISE EXCEPTION 'Los pagos reportados superan el saldo de la reserva';
+      END IF;
       IF v_reserva.status NOT IN ('pending','approved')
          OR v_reserva.payment_mode = 'free'
          OR v_reserva.amount_due <= v_reserva.amount_paid THEN
@@ -463,7 +473,7 @@ FOR INSERT TO authenticated
 WITH CHECK (
   tenant_id = (SELECT public.current_user_tenant_id())
   AND (SELECT public.is_tenant_admin())
-  AND movement_type IN ('payment','reversal','adjustment')
+  AND movement_type IN ('payment','reversal')
 );
 
 DROP POLICY IF EXISTS reserva_movimientos_admin_update
