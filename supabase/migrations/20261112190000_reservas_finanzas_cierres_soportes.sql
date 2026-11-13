@@ -340,7 +340,7 @@ CREATE OR REPLACE FUNCTION public.protect_reserva_extended_financial_fields()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = ''
-AS $
+AS $$
 BEGIN
   IF current_setting('portho24.reserva_financial_write', true) IS DISTINCT FROM 'on'
      AND (
@@ -351,7 +351,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS trg_protect_reserva_extended_financial_fields ON public.reservas;
 CREATE TRIGGER trg_protect_reserva_extended_financial_fields
