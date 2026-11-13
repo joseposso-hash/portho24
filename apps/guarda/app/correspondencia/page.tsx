@@ -445,7 +445,7 @@ export default function CorrespondenciaPage() {
             <form onSubmit={receiveDocuments} className="space-y-5">
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">{housing.singular} de destino</span>
-                <input
+                <select
                   value={receivingUnitId}
                   onChange={(e) => setReceivingUnitId(e.target.value)}
                   
