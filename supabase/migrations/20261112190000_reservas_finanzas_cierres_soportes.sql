@@ -204,8 +204,8 @@ BEGIN
       ELSE
         IF v_original.movement_type <> 'payment'
            OR v_original.verification_status <> 'confirmed'
-           OR v_reserva.status <> 'cancelled' THEN
-          RAISE EXCEPTION 'La devolucion debe corresponder a un pago confirmado de una reserva cancelada';
+           OR v_reserva.status NOT IN ('cancelled','rejected') THEN
+          RAISE EXCEPTION 'La devolucion debe corresponder a un pago confirmado de una reserva cancelada o rechazada';
         END IF;
 
         SELECT COALESCE(SUM(amount), 0)
