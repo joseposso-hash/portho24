@@ -1737,21 +1737,25 @@ export default function ResidentePage() {
                               ? 'bg-amber-100 text-amber-800'
                               : r.status === 'approved'
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
+                                : r.status === 'cancelled'
+                                  ? 'bg-slate-100 text-slate-700'
+                                  : 'bg-red-100 text-red-800'
                           }`}
                         >
                           {r.status === 'pending'
                             ? 'Pendiente'
                             : r.status === 'approved'
                               ? 'Aprobada'
-                              : 'Rechazada'}
+                              : r.status === 'cancelled'
+                                ? 'Cancelada'
+                                : 'Rechazada'}
                         </span>
                       </div>
 
                       <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center text-xs">
                         <div><p className="text-slate-500">Valor</p><p className="font-bold text-slate-800">{Number(r.amount_due || 0).toLocaleString('es-CO')} {r.currency || 'COP'}</p></div>
                         <div><p className="text-slate-500">Pagado</p><p className="font-bold text-emerald-700">{Number(r.amount_paid || 0).toLocaleString('es-CO')}</p></div>
-                        <div><p className="text-slate-500">Saldo</p><p className="font-bold text-amber-700">{Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0)).toLocaleString('es-CO')}</p></div>
+                        <div><p className="text-slate-500">Saldo</p><p className="font-bold text-amber-700">{(r.account_charge_status === 'reversed' ? 0 : Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0))).toLocaleString('es-CO')}</p></div>
                       </div>
                       <p className="mt-2 text-xs text-slate-500">
                         Estado financiero: {r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Pago parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}
