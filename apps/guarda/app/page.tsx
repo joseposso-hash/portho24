@@ -24,7 +24,7 @@ export default function GuardaHome() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        router.push('/login');
+        router.replace('/login');
       } else {
         setUser(session.user);
         cargarActividad();
