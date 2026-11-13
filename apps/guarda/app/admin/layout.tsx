@@ -91,7 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: profile, error } = await supabase
         .from('users')
-        .select('full_name, role, is_active')
+        .select('full_name, role, is_active, tenant_id')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -112,7 +112,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
 
       setNombreAdmin(profile.full_name || 'Administrador');
-      setNombreConjunto('Pinar de la Fontana E3');
+
+      if (profile.tenant_id) {
+        const { data: tenant, error: tenantError } = await supabase
+          .from('tenants')
+          .select('name')
+          .eq('id', profile.tenant_id)
+          .maybeSingle();
+
+        if (tenantError) {
+          console.error('No se pudo cargar el conjunto:', tenantError);
+        }
+
+        setNombreConjunto(tenant?.name || 'Mi Conjunto');
+      }
     }
 
     cargarPerfil();
@@ -249,4 +262,5 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+
 

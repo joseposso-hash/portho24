@@ -1,39 +1,36 @@
+﻿'use client';
 
-'use client';
-
-import { getHouseNumber } from '../lib/house-number';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-
 import { uploadEvidence } from '../lib/evidencias-client';
+import { formatUnitLabel, getHousingConfig, type HousingModel } from '../lib/tenant-config';
+
 const COURIERS = ['Amazon', 'DHL', 'Servientrega', 'MercadoLibre', 'FedEx', 'Otro'];
 
 type Unit = {
   id: string;
   code: string;
   tower_id: string;
+  towerName: string;
 };
 
 export default function LobbyPage() {
   const router = useRouter();
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(true);
   const [unitsError, setUnitsError] = useState<string | null>(null);
+  const [housingModel, setHousingModel] = useState<HousingModel>('units');
 
-  // Registro de paquetes
   const [courier, setCourier] = useState(COURIERS[0]);
   const [tracking, setTracking] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [pin, setPin] = useState<string | null>(null);
+  const [registered, setRegistered] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
-
-  // Registro de correspondencia
-
-  // Entrega de correspondencia
 
   useEffect(() => {
     let cancelled = false;
@@ -57,38 +54,38 @@ export default function LobbyPage() {
           .eq('id', user.id)
           .single();
 
-        if (profileError) {
-          throw new Error(`No fue posible consultar el perfil: ${profileError.message}`);
-        }
+        if (profileError) throw new Error(`No fue posible consultar el perfil: ${profileError.message}`);
+        if (!profile || profile.is_active !== true) throw new Error('El usuario no está activo. Contacta al administrador.');
+        if (profile.role !== 'guard') throw new Error('Esta pantalla está disponible únicamente para vigilancia.');
+        if (!profile.tenant_id) throw new Error('El usuario no tiene un conjunto asignado.');
 
-        if (!profile || profile.is_active !== true) {
-          throw new Error('El usuario no está activo. Contacta al administrador.');
-        }
+        const tenantId = profile.tenant_id;
 
-        if (profile.role !== 'guard') {
-          throw new Error('Esta pantalla está disponible únicamente para vigilancia.');
-        }
+        // El modelo de vivienda se consulta por el tenant autenticado.
+        const { data: tenant } = await supabase
+          .from('tenants')
+          .select('housing_model')
+          .eq('id', tenantId)
+          .maybeSingle();
 
-        if (!profile.tenant_id) {
-          throw new Error('El usuario no tiene un conjunto asignado.');
-        }
+        const model = (
+          tenant?.housing_model ||
+          (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
+        ) as HousingModel;
 
-        const currentTenantId = profile.tenant_id;
+        // Fallback compatible mientras housing_model no exista en la BD.
+        if (!cancelled) setHousingModel(model);
 
         const { data: towers, error: towersError } = await supabase
           .from('towers')
-          .select('id')
-          .eq('tenant_id', currentTenantId);
+          .select('id, name')
+          .eq('tenant_id', tenantId);
 
-        if (towersError) {
-          throw new Error(`No fue posible consultar las torres: ${towersError.message}`);
-        }
-
-        if (!towers || towers.length === 0) {
-          throw new Error('No se encontraron torres para este conjunto.');
-        }
+        if (towersError) throw new Error(`No fue posible consultar las torres del conjunto: ${towersError.message}`);
+        if (!towers || towers.length === 0) throw new Error('No se encontraron unidades organizativas para este conjunto.');
 
         const towerIds = towers.map((tower) => tower.id);
+        const towerNames = new Map(towers.map((tower) => [tower.id, tower.name || '']));
 
         const { data: unitRows, error: unitsQueryError } = await supabase
           .from('units')
@@ -96,24 +93,26 @@ export default function LobbyPage() {
           .in('tower_id', towerIds)
           .order('code');
 
-        if (unitsQueryError) {
-          throw new Error(`No fue posible cargar las casas: ${unitsQueryError.message}`);
-        }
+        if (unitsQueryError) throw new Error(`No fue posible cargar las viviendas: ${unitsQueryError.message}`);
+
+        const scopedUnits: Unit[] = (unitRows || []).map((unit) => ({
+          ...unit,
+          towerName: towerNames.get(unit.tower_id) || '',
+        }));
 
         if (cancelled) return;
-        setUnits((unitRows || []) as Unit[]);
 
-        if (!unitRows || unitRows.length === 0) {
-          setUnitsError('No se encontraron casas registradas para este conjunto.');
+        setUnits(scopedUnits);
+
+        if (scopedUnits.length === 0) {
+          setUnitsError('No se encontraron viviendas registradas para este conjunto.');
         }
       } catch (error) {
         if (cancelled) return;
 
-        const message = error instanceof Error
-          ? error.message
-          : 'Error desconocido al cargar las casas.';
-
-        setUnitsError(message);
+        setUnitsError(
+          error instanceof Error ? error.message : 'Error desconocido al cargar las viviendas.'
+        );
         setUnits([]);
       } finally {
         if (!cancelled) setUnitsLoading(false);
@@ -127,17 +126,19 @@ export default function LobbyPage() {
     };
   }, []);
 
-  const normalizedSearch = unitSearch.trim();
+  const housing = getHousingConfig(housingModel);
+  const normalizedSearch = unitSearch.trim().toLowerCase();
 
   const filteredUnits = normalizedSearch
-    ? units.filter((unit) =>
-        getHouseNumber(unit.code).startsWith(normalizedSearch)
-      )
-    : units;
+    ? units.filter((unit) => {
+        const code = String(unit.code || '').toLowerCase();
+        const label = formatUnitLabel(unit.code, unit.towerName, housingModel).toLowerCase();
+        return code.includes(normalizedSearch) || label.includes(normalizedSearch);
+      })
+    : [];
 
   const selectedUnit = units.find((unit) => unit.id === unitId);
 
-  // Registro de paquetes
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg(null);
@@ -145,17 +146,17 @@ export default function LobbyPage() {
     const validUnit = units.find((unit) => unit.id === unitId);
 
     if (unitsLoading) {
-      setErrorMsg('Espera a que termine la carga de las casas.');
+      setErrorMsg('Espera a que termine la carga de las viviendas.');
       return;
     }
 
     if (!validUnit) {
-      setErrorMsg('Selecciona una casa válida de la lista del conjunto.');
+      setErrorMsg('Selecciona una vivienda válida de la lista del conjunto.');
       return;
     }
 
     if (!photo) {
-      setErrorMsg('Por favor, sube una foto del paquete.');
+      setErrorMsg('Por favor, sube una fotografía del paquete.');
       return;
     }
 
@@ -170,10 +171,7 @@ export default function LobbyPage() {
       } = await supabase.auth.getSession();
 
       if (sessionError) throw sessionError;
-
-      if (!session?.access_token) {
-        throw new Error('La sesión expiró. Inicia sesión nuevamente.');
-      }
+      if (!session?.access_token) throw new Error('La sesión expiró. Inicia sesión nuevamente.');
 
       const response = await fetch('/api/paquetes/registrar', {
         method: 'POST',
@@ -185,7 +183,7 @@ export default function LobbyPage() {
           unitId: validUnit.id,
           courier,
           tracking,
-          photoUrl: photoUrl,
+          photoUrl,
         }),
       });
 
@@ -195,7 +193,7 @@ export default function LobbyPage() {
         throw new Error(result.error || 'No fue posible registrar el paquete.');
       }
 
-      setPin('registrado');
+      setRegistered(true);
     } catch (error) {
       console.error('Error al registrar paquete:', error);
       setErrorMsg(
@@ -217,9 +215,7 @@ export default function LobbyPage() {
             <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
               Recepción en portería
             </h1>
-            <p className="text-xs text-slate-500 sm:text-sm">
-              Registro de paquetes
-            </p>
+            <p className="text-xs text-slate-500 sm:text-sm">Registro de paquetes</p>
           </div>
 
           <button
@@ -233,38 +229,30 @@ export default function LobbyPage() {
 
         {unitsError && (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            <p className="font-semibold">Problema al cargar las casas</p>
+            <p className="font-semibold">Problema al cargar las viviendas</p>
             <p className="mt-1">{unitsError}</p>
           </div>
         )}
 
-        {/* Recepción: ambas tarjetas mantienen la misma altura. */}
         <div className="mx-auto max-w-3xl">
-
-          {/* RECEPCIÓN DE PAQUETES */}
           <section className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex min-h-[88px] flex-col justify-center border-b border-slate-100 bg-white px-4 py-4 sm:px-5">
-              <h2 className="text-lg font-bold text-slate-900">
-                📦 Recibir paquete
-              </h2>
+              <h2 className="text-lg font-bold text-slate-900">Recibir paquete</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Registra el paquete y su destinatario.
               </p>
             </div>
 
-            {pin ? (
+            {registered ? (
               <div className="flex flex-1 flex-col items-center justify-center p-5 text-center sm:p-7">
                 <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
                   <span className="text-2xl text-emerald-700">✓</span>
                 </div>
 
-                <h3 className="text-xl font-bold text-emerald-900">
-                  ¡Paquete registrado!
-                </h3>
+                <h3 className="text-xl font-bold text-emerald-900">¡Paquete registrado!</h3>
 
                 <p className="mx-auto mt-2 max-w-sm text-sm text-emerald-700">
-                  Registro confirmado. El PIN queda reservado para consulta
-                  del residente; vigilancia no puede verlo.
+                  Registro confirmado. El PIN queda reservado para consulta del residente; vigilancia no puede verlo.
                 </p>
 
                 <div className="mt-4 w-full rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -274,7 +262,7 @@ export default function LobbyPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setPin(null);
+                    setRegistered(false);
                     setPhoto(null);
                     setTracking('');
                     setUnitId('');
@@ -282,7 +270,7 @@ export default function LobbyPage() {
                     setCourier(COURIERS[0]);
                     setErrorMsg(null);
                   }}
-                  className="mt-auto w-full rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
+                  className="mt-6 w-full rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
                 >
                   Registrar otro paquete
                 </button>
@@ -327,32 +315,28 @@ export default function LobbyPage() {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-2 text-sm font-bold text-slate-800">
-                      Destinatario
-                    </p>
+                    <p className="mb-2 text-sm font-bold text-slate-800">Destinatario</p>
 
                     <label className="block">
                       <span className="text-xs font-medium text-slate-600">
-                        Número de casa
+                        {housing.model === 'apartments' ? 'Torre y apartamento' : housing.singular}
                       </span>
                       <input
                         type="text"
-                        inputMode="numeric"
                         value={unitSearch}
                         onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '').slice(0, 3);
+                          const value = e.target.value.slice(0, 60);
                           setUnitSearch(value);
+                          setUnitId('');
 
-                          const matches = value && Number(value) >= 1 && Number(value) <= 460
-                            ? units.filter(
-                                (unit) => getHouseNumber(unit.code) === value
-                              )
-                            : [];
+                          const exactMatches = units.filter(
+                            (unit) => String(unit.code).trim().toLowerCase() === value.trim().toLowerCase()
+                          );
 
-                          setUnitId(matches.length === 1 ? matches[0].id : '');
+                          if (exactMatches.length === 1) setUnitId(exactMatches[0].id);
                           setErrorMsg(null);
                         }}
-                        placeholder={unitsLoading ? 'Cargando casas...' : 'Ej. 24'}
+                        placeholder={unitsLoading ? 'Cargando viviendas...' : housing.model === 'apartments' ? 'Ej. Torre 1 · Apartamento 101' : 'Ej. 24'}
                         disabled={unitsLoading || units.length === 0}
                         autoComplete="off"
                         className={inputClass}
@@ -361,42 +345,37 @@ export default function LobbyPage() {
                     </label>
 
                     {unitsLoading && (
-                      <p className="mt-2 text-xs text-slate-500">
-                        Consultando las casas del conjunto...
-                      </p>
+                      <p className="mt-2 text-xs text-slate-500">Consultando las viviendas del conjunto...</p>
                     )}
 
-                    {!unitsLoading &&
-                      filteredUnits.length > 0 &&
-                      !selectedUnit &&
-                      normalizedSearch && (
-                        <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                          {filteredUnits.slice(0, 30).map((unit) => (
-                            <button
-                              key={unit.id}
-                              type="button"
-                              onClick={() => {
-                                setUnitId(unit.id);
-                                setUnitSearch(getHouseNumber(unit.code));
-                                setErrorMsg(null);
-                              }}
-                              className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-100"
-                            >
-                              Casa {getHouseNumber(unit.code)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    {!unitsLoading && filteredUnits.length > 0 && !selectedUnit && (
+                      <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                        {filteredUnits.slice(0, 40).map((unit) => (
+                          <button
+                            key={unit.id}
+                            type="button"
+                            onClick={() => {
+                              setUnitId(unit.id);
+                              setUnitSearch(formatUnitLabel(unit.code, unit.towerName, housingModel));
+                              setErrorMsg(null);
+                            }}
+                            className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-100"
+                          >
+                            {formatUnitLabel(unit.code, unit.towerName, housingModel)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {selectedUnit && (
                       <p className="mt-2 text-sm font-medium text-emerald-700">
-                        ✓ Casa {getHouseNumber(selectedUnit.code)} seleccionada
+                        ✓ {formatUnitLabel(selectedUnit.code, selectedUnit.towerName, housingModel)} seleccionada
                       </p>
                     )}
 
                     {!unitsLoading && units.length > 0 && (
                       <p className="mt-1 text-xs text-slate-500">
-                        {units.length} casas disponibles.
+                        {units.length} {housing.plural.toLowerCase()} disponibles.
                       </p>
                     )}
                   </div>
@@ -441,5 +420,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-
-

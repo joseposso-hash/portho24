@@ -3,3 +3,5 @@ node_modules/
 
 # Respaldos privados de la base de datos
 backups/
+.vercel
+.env*

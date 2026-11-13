@@ -3,14 +3,14 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getHouseNumber } from '../../lib/house-number';
+import { getHousingConfig, formatUnitLabel } from '../../lib/tenant-config';
 
 const DOCUMENT_TYPES: Record<string, string> = {
-  electricity: 'Energía',
+  electricity: 'EnergÃ­a',
   water: 'Agua',
   gas: 'Gas',
-  telecommunications: 'Telefonía / Internet',
-  television: 'Televisión',
+  telecommunications: 'TelefonÃ­a / Internet',
+  television: 'TelevisiÃ³n',
   other: 'Otro documento',
 };
 
@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  received: 'Recibido en portería',
+  received: 'Recibido en porterÃ­a',
   pickup_requested: 'Retiro solicitado',
   delivered: 'Entregado al residente',
   returned: 'Devuelto',
@@ -40,6 +40,7 @@ export default function AdminCorrespondencia() {
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [error, setError] = useState('');
+  const [housingModel, setHousingModel] = useState('units');
 
   useEffect(() => {
     cargar();
@@ -49,20 +50,88 @@ export default function AdminCorrespondencia() {
     setLoading(true);
     setError('');
 
-    const { data, error } = await supabase
-      .from('correspondence_items')
-      .select('id, unit_id, document_type, provider, period, observations, status, received_at, requested_at, delivered_at, delivered_to, units(code, towers(name))')
-      .order('received_at', { ascending: false })
-      .limit(300);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setItems([]);
+        setError('No se encontró una sesión activa.');
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-      setItems([]);
-    } else {
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError || !profile?.tenant_id) {
+        setItems([]);
+        setError('No fue posible identificar el conjunto del usuario.');
+        return;
+      }
+
+      const tenantId = profile.tenant_id;
+      let model = tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
+        ? 'houses'
+        : 'units';
+
+      const { data: tenantWithModel, error: tenantModelError } = await supabase
+        .from('tenants')
+        .select('housing_model')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+      if (!tenantModelError && tenantWithModel?.housing_model) {
+        model = tenantWithModel.housing_model;
+      }
+      setHousingModel(model);
+
+      // Se obtienen exclusivamente las viviendas pertenecientes al tenant.
+      const { data: towers, error: towersError } = await supabase
+        .from('towers')
+        .select('id')
+        .eq('tenant_id', tenantId);
+
+      if (towersError) throw towersError;
+
+      const towerIds = (towers || []).map((tower: any) => tower.id);
+
+      if (towerIds.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const { data: units, error: unitsError } = await supabase
+        .from('units')
+        .select('id')
+        .in('tower_id', towerIds);
+
+      if (unitsError) throw unitsError;
+
+      const unitIds = (units || []).map((unit: any) => unit.id);
+
+      if (unitIds.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const { data, error: itemsError } = await supabase
+        .from('correspondence_items')
+        .select('id, unit_id, document_type, provider, period, observations, status, received_at, requested_at, delivered_at, delivered_to, units(code, towers(name))')
+        .in('unit_id', unitIds)
+        .order('received_at', { ascending: false })
+        .limit(300);
+
+      if (itemsError) throw itemsError;
+
       setItems(data || []);
+    } catch (err: any) {
+      console.error('Error cargando correspondencia:', err);
+      setError(err?.message || 'No fue posible cargar la correspondencia.');
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function verEventos(item: any) {
@@ -94,7 +163,7 @@ export default function AdminCorrespondencia() {
       documento.includes(texto) ||
       item.period?.toLowerCase().includes(texto) ||
       item.units?.code?.toLowerCase().includes(texto) ||
-      getHouseNumber(item.units?.code || '').toLowerCase().includes(texto);
+      String(item.units?.code || '').toLowerCase().includes(texto);
 
     const coincideEstado =
       estadoFiltro === 'todos' || item.status === estadoFiltro;
@@ -195,7 +264,7 @@ export default function AdminCorrespondencia() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <input
               type="text"
-              placeholder="Buscar casa, proveedor o documento..."
+              placeholder="Buscar vivienda, proveedor o documento..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm text-slate-900"
@@ -238,11 +307,11 @@ export default function AdminCorrespondencia() {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="p-4">Casa</th>
+                  <th className="p-4">{getHousingConfig(housingModel).singular}</th>
                   <th className="p-4">Documento</th>
                   <th className="p-4">Proveedor</th>
-                  <th className="p-4">Período</th>
-                  <th className="p-4">Recepción</th>
+                  <th className="p-4">PerÃ­odo</th>
+                  <th className="p-4">RecepciÃ³n</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4">Detalle</th>
                 </tr>
@@ -265,7 +334,7 @@ export default function AdminCorrespondencia() {
                   filtrados.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50">
                       <td className="p-4 font-semibold text-[#1E3A5F]">
-                        Casa {getHouseNumber(item.units?.code || '')}
+                        {formatUnitLabel(item.units?.code, item.units?.towers?.name, housingModel)}
                       </td>
 
                       <td className="p-4">
@@ -319,14 +388,14 @@ export default function AdminCorrespondencia() {
                   className="text-xl text-slate-500 hover:text-slate-800"
                   aria-label="Cerrar detalle"
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
 
               <div className="space-y-3 p-5 text-sm">
                 <p>
-                  <strong>Casa:</strong>{' '}
-                  {getHouseNumber(seleccionado.units?.code || '')}
+                  <strong>{getHousingConfig(housingModel).singular}:</strong>{' '}
+                  {formatUnitLabel(seleccionado.units?.code, seleccionado.units?.towers?.name, housingModel)}
                 </p>
 
                 <p>
@@ -339,7 +408,7 @@ export default function AdminCorrespondencia() {
                 </p>
 
                 <p>
-                  <strong>Período:</strong> {seleccionado.period || '-'}
+                  <strong>PerÃ­odo:</strong> {seleccionado.period || '-'}
                 </p>
 
                 <p>
@@ -406,3 +475,4 @@ export default function AdminCorrespondencia() {
     </div>
   );
 }
+
