@@ -1,7 +1,7 @@
 
 'use client';
 
-import { formatUnitLabel } from '../lib/tenant-config';
+import { formatUnitLabel, type HousingModel } from '../lib/tenant-config';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,7 @@ export default function HistorialPage() {
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'vehiculos'>('paquetes');
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [housingModel, setHousingModel] = useState<HousingModel>('units');
 
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [visitas, setVisitas] = useState<any[]>([]);
@@ -26,6 +27,36 @@ export default function HistorialPage() {
       setLoading(true);
 
       try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+
+        if (user) {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profileError) throw profileError;
+
+          if (profile?.tenant_id) {
+            const { data: tenant, error: tenantError } = await supabase
+              .from('tenants')
+              .select('housing_model')
+              .eq('id', profile.tenant_id)
+              .maybeSingle();
+
+            if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
+              throw tenantError;
+            }
+            if (!tenantError && tenant?.housing_model) {
+              setHousingModel(tenant.housing_model as HousingModel);
+            } else {
+              setHousingModel('units');
+            }
+          }
+        }
+
         const inicioDia = fechaFiltro
           ? `${fechaFiltro}T00:00:00`
           : null;
@@ -36,19 +67,19 @@ export default function HistorialPage() {
 
         let qPacks = supabase
           .from('packages')
-          .select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, signature_url, picked_up_by, units(code, towers(name, tenants(housing_model)))')
+          .select('id, courier, tracking_number, photo_url, status, created_at, picked_up_at, signature_url, picked_up_by, units(code, towers(name))')
           .order('created_at', { ascending: false })
           .limit(100);
 
         let qVisits = supabase
           .from('visits')
-          .select('*, visitors(full_name, doc_number), units(code, towers(name, tenants(housing_model)))')
+          .select('*, visitors(full_name, doc_number), units(code, towers(name))')
           .order('created_at', { ascending: false })
           .limit(100);
 
         let qCars = supabase
           .from('parking_sessions')
-          .select('*, vehicles(plate), units(code, towers(name, tenants(housing_model)))')
+          .select('*, vehicles(plate), units(code, towers(name))')
           .order('created_at', { ascending: false })
           .limit(100);
 
@@ -169,7 +200,7 @@ export default function HistorialPage() {
     if (matchDest) destino = matchDest[1].trim();
 
     if (destino === 'No especificado' && c.units) {
-      destino = formatUnitLabel((c.units as any)?.code, (c.units as any)?.towers?.name, (c.units as any)?.towers?.tenants?.housing_model);
+      destino = formatUnitLabel((c.units as any)?.code, (c.units as any)?.towers?.name, housingModel);
     }
 
     return { conductor, destino };
@@ -274,7 +305,7 @@ export default function HistorialPage() {
                   </td>
 
                   <td className="px-4 py-2 text-xs font-semibold text-[#1E3A5F]">
-                    {formatUnitLabel((p.units as any)?.code, (p.units as any)?.towers?.name, (p.units as any)?.towers?.tenants?.housing_model)}
+                    {formatUnitLabel((p.units as any)?.code, (p.units as any)?.towers?.name, housingModel)}
                   </td>
 
                   <td className="px-4 py-2 text-xs text-slate-600">
@@ -353,7 +384,7 @@ export default function HistorialPage() {
                   </td>
 
                   <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">
-                    {formatUnitLabel((v.units as any)?.code, (v.units as any)?.towers?.name, (v.units as any)?.towers?.tenants?.housing_model)}
+                    {formatUnitLabel((v.units as any)?.code, (v.units as any)?.towers?.name, housingModel)}
                   </td>
 
                   <td className="px-4 py-3">
