@@ -44,16 +44,17 @@ export default function AdminPaquetes() {
 
       const tenantId = profile.tenant_id;
 
-      const { data: tenant } = await supabase
+      const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
         .select('housing_model')
         .eq('id', tenantId)
         .maybeSingle();
 
-      const model = (
-        tenant?.housing_model ||
-        (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
-      ) as HousingModel;
+      if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
+        throw tenantError;
+      }
+
+      const model = (tenant?.housing_model || 'units') as HousingModel;
 
       setHousingModel(model);
 
