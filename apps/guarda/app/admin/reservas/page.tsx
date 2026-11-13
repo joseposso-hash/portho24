@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 export default function AdminReservas() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [procesandoPago, setProcesandoPago] = useState<string | null>(null);
 
   useEffect(() => {
     cargarReservas();
@@ -52,16 +53,87 @@ export default function AdminReservas() {
   }
 
   async function validarPago(id: string, aprobado: boolean) {
-    const { error } = await supabase
-      .from('reserva_movimientos_financieros')
-      .update({ verification_status: aprobado ? 'confirmed' : 'rejected' })
-      .eq('id', id);
+    if (procesandoPago) return;
+    setProcesandoPago(id);
 
-    if (error) {
-      alert('No fue posible actualizar el pago: ' + error.message);
-      return;
+    try {
+      // Validar la sesión y el perfil antes de intentar la operación protegida por RLS.
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('No fue posible validar la sesión: ' + authError.message);
+      if (!authData.user) {
+        alert('La sesión expiró. Ingresa nuevamente como administrador.');
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('tenant_id, role, is_active')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        throw new Error('No fue posible validar el perfil administrador: ' + profileError.message);
+      }
+      if (!profile || !profile.is_active || profile.role !== 'admin' || !profile.tenant_id) {
+        alert('La sesión actual no corresponde a un administrador activo del conjunto. Cierra sesión e ingresa con la cuenta administradora.');
+        return;
+      }
+
+      const nuevoEstado = aprobado ? 'confirmed' : 'rejected';
+      const { data: actualizado, error } = await supabase
+        .from('reserva_movimientos_financieros')
+        .update({ verification_status: nuevoEstado })
+        .eq('id', id)
+        .eq('tenant_id', profile.tenant_id)
+        .eq('movement_type', 'payment')
+        .eq('verification_status', 'pending')
+        .select('id, verification_status, verified_by, verified_at')
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(
+          'Supabase rechazó la validación del pago. ' +
+          error.message +
+          (error.code ? ' [Código: ' + error.code + ']' : '') +
+          (error.details ? ' Detalle: ' + error.details : '') +
+          (error.hint ? ' Ayuda: ' + error.hint : '')
+        );
+      }
+
+      if (!actualizado) {
+        const { data: movimiento, error: consultaError } = await supabase
+          .from('reserva_movimientos_financieros')
+          .select('id, tenant_id, movement_type, verification_status')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (consultaError) {
+          throw new Error('No se pudo verificar el resultado de la operación: ' + consultaError.message);
+        }
+        if (!movimiento) {
+          throw new Error('No se modificó ningún pago. El movimiento no es visible para esta sesión o la política RLS está bloqueando la operación.');
+        }
+        if (movimiento.tenant_id !== profile.tenant_id) {
+          throw new Error('El pago pertenece a otro conjunto; no se realizó ningún cambio.');
+        }
+        if (movimiento.verification_status !== 'pending') {
+          throw new Error('Este pago ya fue procesado. Estado actual: ' + movimiento.verification_status + '. Actualiza la página.');
+        }
+        throw new Error('Supabase no confirmó ninguna fila modificada. El pago continúa pendiente; revisa los permisos UPDATE de la sesión administradora.');
+      }
+
+      if (actualizado.verification_status !== nuevoEstado || !actualizado.verified_by || !actualizado.verified_at) {
+        throw new Error('La base de datos no devolvió la confirmación completa del movimiento. Verifica el estado antes de continuar.');
+      }
+
+      await cargarReservas();
+      alert(aprobado ? 'Pago confirmado correctamente.' : 'Pago rechazado correctamente.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert('No fue posible ' + (aprobado ? 'confirmar' : 'rechazar') + ' el pago:\n' + message);
+    } finally {
+      setProcesandoPago(null);
     }
-    await cargarReservas();
   }
 
   async function abrirSoporte(path: string) {
@@ -187,8 +259,8 @@ export default function AdminReservas() {
                           {m.reference && <p>Ref: {m.reference}</p>}
                           {m.support_path && <button onClick={() => abrirSoporte(m.support_path)} className="mt-1 text-blue-700 underline">Ver soporte</button>}
                           <div className="mt-2 flex gap-2">
-                            <button onClick={() => validarPago(m.id, true)} className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800">Confirmar</button>
-                            <button onClick={() => validarPago(m.id, false)} className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">Rechazar</button>
+                            <button type="button" disabled={procesandoPago !== null} onClick={() => validarPago(m.id, true)} className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">{procesandoPago === m.id ? 'Confirmando...' : 'Confirmar'}</button>
+                            <button type="button" disabled={procesandoPago !== null} onClick={() => validarPago(m.id, false)} className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50">{procesandoPago === m.id ? 'Procesando...' : 'Rechazar'}</button>
                           </div>
                         </div>
                       ))}
