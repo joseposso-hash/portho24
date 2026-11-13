@@ -103,8 +103,8 @@ export default function AdminAreasPage() {
       setMessage('Activa al menos una modalidad de cobro.');
       return;
     }
-    if (form.allow_prepaid && form.payment_methods.length === 0) {
-      setMessage('Selecciona al menos un medio de pago.');
+    if ((form.allow_prepaid || form.allow_account_charge) && form.payment_methods.length === 0) {
+      setMessage('Selecciona al menos un medio de pago para recibir los abonos.');
       return;
     }
 
