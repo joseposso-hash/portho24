@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 import { uploadEvidence } from '../lib/evidencias-client';
-import { formatUnitLabel, HousingModel } from '../lib/tenant-config';
+import { formatUnitLabel, type HousingModel } from '../lib/tenant-config';
 
 export default function VisitasPage() {
   const router = useRouter();
