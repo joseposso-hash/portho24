@@ -204,7 +204,7 @@ export default function AdminReservas() {
                       {r.status === 'approved' && (
                         <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
                       )}
-                      {r.status === 'cancelled' && (
+                      {['cancelled','rejected'].includes(r.status) && (
                         <div className="min-w-36 space-y-2">
                           <p className="font-semibold text-slate-700">Devoluciones: {r.refund_status === 'refunded' ? 'Completadas' : r.refund_status === 'partial' ? 'Parciales' : r.refund_status === 'pending' ? 'Pendientes' : 'No aplica'}</p>
                           {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros
