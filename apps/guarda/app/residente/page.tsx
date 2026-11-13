@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-
+
 import EvidenceImage from '../components/EvidenceImage';
 const DOCUMENT_LABELS: Record<string, string> = {
   electricity: 'Energía',
@@ -154,7 +154,9 @@ export default function ResidentePage() {
     startTime: '',
     endTime: '',
     notes: '',
+    paymentMode: '',
   });
+  const [enviandoPagoId, setEnviandoPagoId] = useState<string | null>(null);
   const [enviandoReserva, setEnviandoReserva] = useState(false);
 
   // PQRS
@@ -324,11 +326,11 @@ export default function ResidentePage() {
           .order('check_in_at', { ascending: false })
           .limit(5),
 
-        supabase.from('areas_comunes').select('*'),
+        supabase.from('areas_comunes').select('*').eq('tenant_id', tenantId).eq('is_active', true),
 
         supabase
           .from('reservas')
-          .select('*, areas_comunes(name, icon)')
+          .select('*, areas_comunes(name, icon), reserva_movimientos_financieros(*)')
           .eq('unit_id', unitId)
           .gte('date', new Date().toISOString().split('T')[0])
           .order('date', { ascending: true }),
@@ -570,17 +572,18 @@ export default function ResidentePage() {
       end_time: reservaForm.endTime,
       notes: reservaForm.notes,
       status: 'pending',
+      payment_mode: reservaForm.paymentMode || null,
     });
 
     if (error) {
       alert('Error al reservar: ' + error.message);
     } else {
       alert('Reserva solicitada.');
-      setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '' });
+      setReservaForm({ areaId: '', date: '', startTime: '', endTime: '', notes: '', paymentMode: '' });
 
       const { data } = await supabase
         .from('reservas')
-        .select('*, areas_comunes(name, icon)')
+        .select('*, areas_comunes(name, icon), reserva_movimientos_financieros(*)')
         .eq('unit_id', miUnidad.id)
         .gte('date', new Date().toISOString().split('T')[0])
         .order('date', { ascending: true });
@@ -589,6 +592,55 @@ export default function ResidentePage() {
     }
 
     setEnviandoReserva(false);
+  }
+
+  async function reportarPago(e: React.FormEvent<HTMLFormElement>, reserva: any) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const amount = Number(formData.get('amount'));
+    const paymentMethod = String(formData.get('payment_method') || '');
+    const reference = String(formData.get('reference') || '').trim();
+    const notes = String(formData.get('notes') || '').trim();
+
+    if (!miUnidad || !miTenantId || !Number.isFinite(amount) || amount <= 0 || !paymentMethod) {
+      alert('Verifica el valor y el medio de pago.');
+      return;
+    }
+
+    setEnviandoPagoId(reserva.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('La sesión expiró. Ingresa nuevamente.');
+      setEnviandoPagoId(null);
+      return;
+    }
+
+    const { error } = await supabase.from('reserva_movimientos_financieros').insert({
+      tenant_id: miTenantId,
+      reserva_id: reserva.id,
+      movement_type: 'payment',
+      amount,
+      payment_method: paymentMethod,
+      reference: reference || null,
+      notes: notes || null,
+      verification_status: 'pending',
+      recorded_by: user.id,
+    });
+
+    if (error) {
+      alert('No fue posible reportar el pago: ' + error.message);
+    } else {
+      alert('Pago reportado. Quedó pendiente de validación administrativa.');
+      form.reset();
+      const { data } = await supabase
+        .from('reservas')
+        .select('*, areas_comunes(name, icon), reserva_movimientos_financieros(*)')
+        .eq('unit_id', miUnidad.id)
+        .order('date', { ascending: true });
+      if (data) setMisReservas(data);
+    }
+    setEnviandoPagoId(null);
   }
 
   async function enviarPQRS(e: React.FormEvent) {
@@ -1559,6 +1611,34 @@ export default function ResidentePage() {
                   </select>
                 </label>
 
+                {(() => {
+                  const areaSeleccionada = areas.find((area) => area.id === reservaForm.areaId);
+                  if (!areaSeleccionada) return null;
+                  const tarifa = Number(areaSeleccionada.reservation_fee || 0);
+                  return (
+                    <div className="rounded-lg bg-slate-50 p-3 text-sm">
+                      <p className="font-semibold text-slate-800">
+                        {tarifa === 0 ? 'Reserva sin costo' : 'Valor: ' + new Intl.NumberFormat('es-CO', { style: 'currency', currency: areaSeleccionada.currency || 'COP', maximumFractionDigits: 0 }).format(tarifa)}
+                      </p>
+                      {tarifa > 0 && (
+                        <label className="mt-3 block">
+                          <span className="font-medium text-slate-700">Modalidad de pago</span>
+                          <select
+                            required
+                            value={reservaForm.paymentMode}
+                            onChange={(e) => setReservaForm({ ...reservaForm, paymentMode: e.target.value })}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5"
+                          >
+                            <option value="">Seleccionar modalidad...</option>
+                            {areaSeleccionada.allow_prepaid && <option value="prepaid">Pago anticipado</option>}
+                            {areaSeleccionada.allow_account_charge && <option value="account">Cargo a cuenta de la casa</option>}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Fecha</span>
                   <input
@@ -1642,6 +1722,42 @@ export default function ResidentePage() {
                         </span>
                       </div>
 
+                      <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center text-xs">
+                        <div><p className="text-slate-500">Valor</p><p className="font-bold text-slate-800">{Number(r.amount_due || 0).toLocaleString('es-CO')} {r.currency || 'COP'}</p></div>
+                        <div><p className="text-slate-500">Pagado</p><p className="font-bold text-emerald-700">{Number(r.amount_paid || 0).toLocaleString('es-CO')}</p></div>
+                        <div><p className="text-slate-500">Saldo</p><p className="font-bold text-amber-700">{Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0)).toLocaleString('es-CO')}</p></div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Estado financiero: {r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Pago parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}
+                        {' · Modalidad: '}{r.payment_mode === 'prepaid' ? 'Anticipado' : r.payment_mode === 'account' ? 'Cargo a cuenta' : 'Sin costo'}
+                      </p>
+                      {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.length > 0 && (
+                        <div className="mt-3 border-t border-slate-100 pt-3">
+                          <p className="mb-2 text-xs font-semibold text-slate-600">Movimientos</p>
+                          {r.reserva_movimientos_financieros.map((movement: any) => (
+                            <p key={movement.id} className="text-xs text-slate-500">
+                              {movement.movement_type === 'charge' ? 'Cargo a cuenta' : movement.movement_type === 'payment' ? 'Pago' : 'Ajuste'} · {Number(movement.amount).toLocaleString('es-CO')} · {movement.verification_status === 'confirmed' ? 'Confirmado' : movement.verification_status === 'rejected' ? 'Rechazado' : 'Pendiente de validación'}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {r.amount_due > r.amount_paid && ['pending','approved'].includes(r.status) && r.payment_mode !== 'free' && (
+                        <form onSubmit={(e) => reportarPago(e, r)} className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                          <p className="text-xs font-semibold text-slate-700">Reportar abono o pago</p>
+                          <input name="amount" type="number" min="1" max={Number(r.amount_due) - Number(r.amount_paid)} step="1" required placeholder="Valor pagado" className="w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                          <select name="payment_method" required defaultValue="" className="w-full rounded-lg border border-slate-300 p-2 text-sm">
+                            <option value="" disabled>Medio de pago</option>
+                            {(r.tariff_snapshot?.payment_methods || []).map((method: string) => (
+                              <option key={method} value={method}>{method === 'transfer' ? 'Transferencia' : method === 'cash' ? 'Efectivo' : method === 'card' ? 'Tarjeta' : 'Otro'}</option>
+                            ))}
+                          </select>
+                          <input name="reference" placeholder="Referencia (opcional)" className="w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                          <textarea name="notes" rows={2} placeholder="Observaciones (opcional)" className="w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                          <button disabled={enviandoPagoId === r.id} className="w-full rounded-lg bg-slate-800 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                            {enviandoPagoId === r.id ? 'Enviando...' : 'Reportar pago'}
+                          </button>
+                        </form>
+                      )}
                       {r.admin_notes && (
                         <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
                           <strong>Motivo:</strong> {r.admin_notes}
