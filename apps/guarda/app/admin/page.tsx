@@ -60,6 +60,7 @@ const grupos = [
     items: [
       { nombre: 'Residentes', detalle: 'Directorio de casas y residentes', href: '/admin/directorio', icon: 'users' as const, color: 'blue' },
       { nombre: 'Reservas', detalle: 'Administración de áreas comunes', href: '/admin/reservas', icon: 'calendar' as const, color: 'violet' },
+      { nombre: 'Áreas comunes', detalle: 'Configuración de espacios, tarifas y cobros', href: '/admin/areas', icon: 'home' as const, color: 'emerald' },
       { nombre: 'PQRS', detalle: 'Solicitudes y seguimiento', href: '/admin/pqrs', icon: 'clipboard' as const, color: 'rose' },
       { nombre: 'Comunicados', detalle: 'Novedades e información del conjunto', href: '/admin/comunicados', icon: 'megaphone' as const, color: 'amber' },
     ],
