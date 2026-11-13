@@ -54,7 +54,7 @@ export default function VisitasPage() {
           .eq('id', currentTenantId)
           .maybeSingle();
 
-        if (tenantError && tenantError.code !== '42703') throw tenantError;
+        if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) throw tenantError;
         if (!tenantError && tenant?.housing_model) {
           model = tenant.housing_model as HousingModel;
         }
