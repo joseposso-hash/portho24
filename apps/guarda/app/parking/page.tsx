@@ -4,7 +4,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-import { formatUnitLabel, HousingModel } from '../lib/tenant-config';
+import { formatUnitLabel, type HousingModel } from '../lib/tenant-config';
 
 import { uploadEvidence } from '../lib/evidencias-client';
 type PaymentMethod = 'cash' | 'transfer' | 'card' | 'other';
@@ -810,7 +810,7 @@ function ParkingContent() {
                 }`}
               >
                 <span className="block font-semibold text-slate-800">
-                  Residente de la casa
+                  Residente de la vivienda
                 </span>
                 <span className="block text-sm text-slate-500">
                   Se solicitará autorización digital antes de registrar el
@@ -846,7 +846,7 @@ function ParkingContent() {
                   </select>
                 ) : (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    No hay residentes activos disponibles para esta casa. No se
+                    No hay residentes activos disponibles para esta vivienda. No se
                     puede solicitar un cobro a residente.
                   </div>
                 )}
