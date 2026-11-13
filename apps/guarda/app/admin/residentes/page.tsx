@@ -41,7 +41,7 @@ type EditDraft = {
 export default function AdminResidentes() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [housingModel, setHousingModel] = useState<HousingModel>('units');
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
   const housing = getHousingConfig(housingModel);
   const [history, setHistory] = useState<History[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
