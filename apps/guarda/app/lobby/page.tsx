@@ -62,16 +62,17 @@ export default function LobbyPage() {
         const tenantId = profile.tenant_id;
 
         // El modelo de vivienda se consulta por el tenant autenticado.
-        const { data: tenant } = await supabase
+        const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
           .select('housing_model')
           .eq('id', tenantId)
           .maybeSingle();
 
-        const model = (
-          tenant?.housing_model ||
-          (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
-        ) as HousingModel;
+        if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
+          throw new Error(`No fue posible consultar el modelo de vivienda: ${tenantError.message}`);
+        }
+
+        const model = (tenant?.housing_model || 'units') as HousingModel;
 
         // Fallback compatible mientras housing_model no exista en la BD.
         if (!cancelled) setHousingModel(model);
