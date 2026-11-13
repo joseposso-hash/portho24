@@ -335,6 +335,29 @@ BEGIN
 END;
 $$;
 
+-- Protege estados financieros extendidos frente a ediciones directas.
+CREATE OR REPLACE FUNCTION public.protect_reserva_extended_financial_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $
+BEGIN
+  IF current_setting('portho24.reserva_financial_write', true) IS DISTINCT FROM 'on'
+     AND (
+       NEW.refund_status IS DISTINCT FROM OLD.refund_status
+       OR NEW.account_charge_status IS DISTINCT FROM OLD.account_charge_status
+     ) THEN
+    RAISE EXCEPTION 'Los estados de devolucion y cargo solo pueden cambiar mediante el libro financiero';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS trg_protect_reserva_extended_financial_fields ON public.reservas;
+CREATE TRIGGER trg_protect_reserva_extended_financial_fields
+BEFORE UPDATE ON public.reservas
+FOR EACH ROW EXECUTE FUNCTION public.protect_reserva_extended_financial_fields();
+
 -- Si se cancela una reserva, se anulan reportes sin validar y se revierte el cargo a cuenta.
 -- Los pagos ya recibidos no se devuelven automáticamente: quedan pendientes de decisión administrativa.
 CREATE OR REPLACE FUNCTION public.handle_reserva_cancellation_finances()
@@ -378,12 +401,15 @@ BEGIN
           'confirmed', 'Reversion automatica del cargo por cancelacion de la reserva',
           auth.uid(), auth.uid(), now()
         );
+        PERFORM set_config('portho24.reserva_financial_write', 'on', true);
         UPDATE public.reservas
         SET account_charge_status = 'reversed'
         WHERE id = NEW.id;
+        PERFORM set_config('portho24.reserva_financial_write', 'off', true);
       END IF;
     END IF;
 
+    PERFORM set_config('portho24.reserva_financial_write', 'on', true);
     UPDATE public.reservas
     SET refund_status = CASE
       WHEN amount_paid > 0 THEN 'pending'
@@ -391,6 +417,7 @@ BEGIN
     END
     WHERE id = NEW.id
       AND payment_mode = 'prepaid';
+    PERFORM set_config('portho24.reserva_financial_write', 'off', true);
   END IF;
   RETURN NEW;
 END;
