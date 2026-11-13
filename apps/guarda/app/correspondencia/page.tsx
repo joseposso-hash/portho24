@@ -509,13 +509,13 @@ export default function CorrespondenciaPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <label className="block flex-1">
-                <span className="text-sm font-semibold text-slate-700">Número de casa</span>
-                <input value={deliveryUnitId} onChange={(e) => {
+                <span className="text-sm font-semibold text-slate-700">{housing.singular} de destino</span>
+                <select value={deliveryUnitId} onChange={(e) => {
                   setDeliveryUnitId(e.target.value);
                   setPending([]);
                   setSelected([]);
                   setSearched(false);
-                }} inputMode="numeric" className={inputClass}>
+                }} className={inputClass}>
                   <option value="">Seleccionar {housing.article}</option>
                   {units.map((unit) => (
                     <option key={unit.id} value={unit.id}>
