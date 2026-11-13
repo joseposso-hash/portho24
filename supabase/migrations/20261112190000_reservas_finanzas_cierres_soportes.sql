@@ -246,6 +246,12 @@ BEGIN
       RAISE EXCEPTION 'El movimiento ya fue procesado o no tienes permiso para validarlo';
     END IF;
 
+    IF NEW.movement_type = 'payment'
+       AND NEW.verification_status = 'confirmed'
+       AND v_reserva.status NOT IN ('pending','approved') THEN
+      RAISE EXCEPTION 'No se puede confirmar un pago de una reserva rechazada o cancelada';
+    END IF;
+
     NEW.verified_by := auth.uid();
     NEW.verified_at := now();
   END IF;
@@ -342,6 +348,11 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 BEGIN
+  IF OLD.status IN ('cancelled','rejected')
+     AND NEW.status NOT IN ('cancelled','rejected') THEN
+    RAISE EXCEPTION 'Una reserva rechazada o cancelada no puede reactivarse';
+  END IF;
+
   IF current_setting('portho24.reserva_financial_write', true) IS DISTINCT FROM 'on'
      AND (
        NEW.refund_status IS DISTINCT FROM OLD.refund_status
