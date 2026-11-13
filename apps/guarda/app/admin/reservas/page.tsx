@@ -32,8 +32,10 @@ export default function AdminReservas() {
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
     let motivo = null;
-    if (nuevoEstado === 'rejected') {
-      motivo = prompt('Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
+    if (nuevoEstado === 'rejected' || nuevoEstado === 'cancelled') {
+      motivo = prompt(nuevoEstado === 'cancelled'
+        ? 'Indica el motivo de la cancelación:'
+        : 'Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
       if (motivo === null) return;
       if (motivo.trim() === '') {
         alert('Debes escribir un motivo para rechazar la reserva.');
@@ -53,6 +55,62 @@ export default function AdminReservas() {
 
     if (error) {
       alert('No fue posible actualizar el pago: ' + error.message);
+      return;
+    }
+    await cargarReservas();
+  }
+
+  async function abrirSoporte(path: string) {
+    const { data, error } = await supabase.storage
+      .from('reserva-soportes')
+      .createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      alert('No fue posible abrir el soporte: ' + (error?.message || 'URL no disponible'));
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  async function registrarDevolucion(reserva: any, pago: any) {
+    const movimientos = Array.isArray(reserva.reserva_movimientos_financieros)
+      ? reserva.reserva_movimientos_financieros
+      : [];
+    const yaDevuelto = movimientos
+      .filter((m: any) => m.movement_type === 'refund' && m.reversal_of_id === pago.id && m.verification_status === 'confirmed')
+      .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+    const disponible = Math.max(0, Number(pago.amount) - yaDevuelto);
+    if (disponible <= 0) {
+      alert('Este pago ya fue devuelto en su totalidad.');
+      return;
+    }
+
+    const valor = prompt(`Valor a devolver. Máximo disponible: ${disponible.toLocaleString('es-CO')} ${reserva.currency || 'COP'}`, String(disponible));
+    if (valor === null) return;
+    const amount = Number(valor);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > disponible) {
+      alert('Ingresa un valor válido que no supere el saldo del pago original.');
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('La sesión expiró. Ingresa nuevamente.');
+      return;
+    }
+
+    const { error } = await supabase.from('reserva_movimientos_financieros').insert({
+      tenant_id: reserva.tenant_id,
+      reserva_id: reserva.id,
+      movement_type: 'refund',
+      amount,
+      reversal_of_id: pago.id,
+      verification_status: 'confirmed',
+      recorded_by: user.id,
+      notes: 'Devolución registrada por administración',
+    });
+
+    if (error) {
+      alert('No fue posible registrar la devolución: ' + error.message);
       return;
     }
     await cargarReservas();
@@ -106,7 +164,7 @@ export default function AdminReservas() {
                         r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 
                         'bg-red-100 text-red-800'
                       }`}>
-                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : r.status === 'cancelled' ? 'Cancelada' : 'Rechazada'}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-xs">
@@ -118,6 +176,7 @@ export default function AdminReservas() {
                         <div key={m.id} className="mt-2 rounded-lg bg-amber-50 p-2">
                           <p className="mb-1">Pago reportado: {Number(m.amount).toLocaleString('es-CO')} · {m.payment_method || 'Medio no indicado'}</p>
                           {m.reference && <p>Ref: {m.reference}</p>}
+                          {m.support_path && <button onClick={() => abrirSoporte(m.support_path)} className="mt-1 text-blue-700 underline">Ver soporte</button>}
                           <div className="mt-2 flex gap-2">
                             <button onClick={() => validarPago(m.id, true)} className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800">Confirmar</button>
                             <button onClick={() => validarPago(m.id, false)} className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">Rechazar</button>
@@ -130,7 +189,28 @@ export default function AdminReservas() {
                         <>
                           <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
                           <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
+                          <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
                         </>
+                      )}
+                      {r.status === 'approved' && (
+                        <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
+                      )}
+                      {r.status === 'cancelled' && (
+                        <div className="min-w-36 space-y-2">
+                          <p className="font-semibold text-slate-700">Devoluciones: {r.refund_status === 'refunded' ? 'Completadas' : r.refund_status === 'partial' ? 'Parciales' : r.refund_status === 'pending' ? 'Pendientes' : 'No aplica'}</p>
+                          {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros
+                            .filter((m: any) => m.movement_type === 'payment' && m.verification_status === 'confirmed')
+                            .map((pago: any) => {
+                              const devuelto = r.reserva_movimientos_financieros
+                                .filter((m: any) => m.movement_type === 'refund' && m.reversal_of_id === pago.id && m.verification_status === 'confirmed')
+                                .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+                              return Number(pago.amount) > devuelto ? (
+                                <button key={pago.id} onClick={() => registrarDevolucion(r, pago)} className="block text-xs rounded bg-blue-50 px-2 py-1 text-blue-800">
+                                  Devolver saldo ({(Number(pago.amount) - devuelto).toLocaleString('es-CO')})
+                                </button>
+                              ) : null;
+                            })}
+                        </div>
                       )}
                     </td>
                   </tr>
