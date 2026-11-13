@@ -14,7 +14,7 @@ export default function HistorialPage() {
   const [tab, setTab] = useState<'paquetes' | 'visitas' | 'vehiculos'>('paquetes');
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [housingModel, setHousingModel] = useState<HousingModel>('units');
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
 
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [visitas, setVisitas] = useState<any[]>([]);
@@ -52,7 +52,7 @@ export default function HistorialPage() {
             if (!tenantError && tenant?.housing_model) {
               setHousingModel(tenant.housing_model as HousingModel);
             } else {
-              setHousingModel('units');
+              setHousingModel('houses');
             }
           }
         }
