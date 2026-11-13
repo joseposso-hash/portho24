@@ -811,7 +811,7 @@ export default function ResidentePage() {
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">
-                  {miUnidad.towers.tenants.name} - {formatUnitLabel(miUnidad.code, miUnidad.towers.name, miUnidad.towers.tenants.housing_model)}
+                  {miUnidad.towers.tenants.name} - {formatUnitLabel(miUnidad.code, miUnidad.towers.name, miUnidad.towers.tenants.housing_model || 'houses')}
                 </p>
               </div>
             </div>
