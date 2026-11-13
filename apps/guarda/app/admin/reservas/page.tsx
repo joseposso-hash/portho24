@@ -254,7 +254,7 @@ export default function AdminReservas() {
       </header>
 
       {mensajeAccion && (
-        <div role="status" aria-live="polite" className={\`mx-8 mt-4 rounded-lg border px-4 py-3 text-sm font-medium \${mensajeAccion.tipo === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}\`}>
+        <div role="status" aria-live="polite" className={`mx-8 mt-4 rounded-lg border px-4 py-3 text-sm font-medium ${mensajeAccion.tipo === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
           {mensajeAccion.texto}
           <button type="button" onClick={() => setMensajeAccion(null)} className="ml-3 font-bold underline">Cerrar</button>
         </div>
