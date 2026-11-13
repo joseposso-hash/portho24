@@ -82,7 +82,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function cargarPerfil() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {\n        router.replace('/login');\n        return;\n      }
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
 
       const { data: profile } = await supabase
         .from('users')
@@ -90,12 +93,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq('id', user.id)
         .maybeSingle();
 
-      if (!profile || profile.role !== 'admin' || profile.is_active === false) {\n        router.replace(profile?.role === 'resident' ? '/residente' : profile?.role === 'guard' ? '/guarda' : '/login');\n        return;\n      }\n\n      if (profile) {\n        setNombreAdmin(profile.full_name || 'Administrador');
+      if (!profile || profile.role !== 'admin' || profile.is_active === false) {
+        router.replace(profile?.role === 'resident' ? '/residente' : profile?.role === 'guard' ? '/guarda' : '/login');
+        return;
+      }
+
+      if (profile) {
+        setNombreAdmin(profile.full_name || 'Administrador');
         const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
         if (tenantData?.name) setNombreConjunto('Pinar de la Fontana E3');
       }
     }
-    cargarPerfil();\n  }, [router]);
+    cargarPerfil();
+  }, [router]);
 
   useEffect(() => {
     if (window.innerWidth > 768) setIsOpen(true);
