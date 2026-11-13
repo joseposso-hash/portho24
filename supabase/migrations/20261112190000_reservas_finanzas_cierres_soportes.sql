@@ -105,7 +105,6 @@ USING (
     OR
     (
       split_part(name, '/', 1) = (SELECT public.current_user_tenant_id())::text
-      AND split_part(name, '/', 3) = (SELECT auth.uid())::text
       AND (SELECT public.is_tenant_resident())
       AND EXISTS (
         SELECT 1
