@@ -46,7 +46,7 @@ export default function VisitasPage() {
         const currentTenantId = profile.tenant_id;
         setTenantId(currentTenantId);
 
-        let model: HousingModel = 'units';
+        let model: HousingModel = 'houses';
 
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
