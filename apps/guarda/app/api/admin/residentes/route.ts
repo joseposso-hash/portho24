@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     // Compatibilidad temporal mientras se aplica la migración del modelo de vivienda.
-    if (tenantError && tenantError.code !== '42703') throw tenantError;
+    if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) throw tenantError;
     const housingModel = tenantError ? 'units' : tenant?.housing_model || 'units';
 
     const { data: towers, error: towersError } = await supabaseAdmin
