@@ -10,7 +10,7 @@ ALTER TABLE public.areas_comunes
   ADD COLUMN IF NOT EXISTS currency text NOT NULL DEFAULT 'COP',
   ADD COLUMN IF NOT EXISTS allow_prepaid boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS allow_account_charge boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS prepaid_payment_methods text[] NOT NULL DEFAULT ARRAY['transfer']::text[],
+  ADD COLUMN IF NOT EXISTS payment_methods text[] NOT NULL DEFAULT ARRAY['transfer']::text[],
   ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
 
 DO $$
@@ -43,8 +43,8 @@ BEGIN
     ALTER TABLE public.areas_comunes
       ADD CONSTRAINT areas_comunes_payment_methods_check
       CHECK (
-        prepaid_payment_methods <@ ARRAY['cash','transfer','card','other']::text[]
-        AND (NOT allow_prepaid OR cardinality(prepaid_payment_methods) > 0)
+        payment_methods <@ ARRAY['cash','transfer','card','other']::text[]
+        AND (NOT allow_prepaid OR cardinality(payment_methods) > 0)
       );
   END IF;
 END $$;
@@ -167,7 +167,7 @@ BEGIN
         RAISE EXCEPTION 'El pago anticipado no esta habilitado para esta area';
       ELSIF NEW.payment_mode = 'account' AND NOT v_area.allow_account_charge THEN
         RAISE EXCEPTION 'El cargo a cuenta no esta habilitado para esta area';
-      ELSIF NEW.payment_mode NOT IN ('prepaid','account') THEN
+      ELSIF NEW.payment_mode IS NULL OR NEW.payment_mode NOT IN ('prepaid','account') THEN
         RAISE EXCEPTION 'Selecciona una modalidad de pago valida';
       END IF;
       NEW.payment_status := 'pending';
@@ -183,7 +183,7 @@ BEGIN
       'amount', v_area.reservation_fee,
       'currency', v_area.currency,
       'payment_mode', NEW.payment_mode,
-      'prepaid_payment_methods', v_area.prepaid_payment_methods,
+      'payment_methods', v_area.payment_methods,
       'captured_at', now()
     );
     RETURN NEW;
@@ -291,6 +291,10 @@ BEGIN
       END IF;
       IF NEW.recorded_by IS DISTINCT FROM auth.uid() THEN
         RAISE EXCEPTION 'El usuario que registra el pago no coincide con la sesion';
+      END IF;
+      IF NEW.payment_method IS NULL
+         OR NOT ((v_reserva.tariff_snapshot -> 'payment_methods') ? NEW.payment_method) THEN
+        RAISE EXCEPTION 'El medio de pago no esta habilitado para esta reserva';
       END IF;
       IF v_reserva.status NOT IN ('pending','approved')
          OR v_reserva.payment_mode = 'free'
