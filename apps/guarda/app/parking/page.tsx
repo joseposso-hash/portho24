@@ -77,7 +77,7 @@ function ParkingContent() {
         .eq('id', currentTenantId)
         .maybeSingle();
 
-      if (tenantError && tenantError.code !== '42703') {
+      if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
         console.error('Error consultando modelo de vivienda:', tenantError);
       } else if (!tenantError && tenant?.housing_model) {
         setHousingModel(tenant.housing_model as HousingModel);
