@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -57,7 +57,8 @@ const menuGroups = [
   {
     title: 'Comunidad y convivencia',
     items: [
-      { label: 'Residentes', href: '/admin/directorio', icon: 'users' as const },
+            { label: 'Directorio', href: '/admin/directorio', icon: 'users' as const },
+      { label: 'Gestión de hogares', href: '/admin/residentes', icon: 'home' as const },
       { label: 'Reservas', href: '/admin/reservas', icon: 'calendar' as const },
       { label: 'PQRS', href: '/admin/pqrs', icon: 'clipboard' as const },
       { label: 'Comunicados', href: '/admin/comunicados', icon: 'megaphone' as const },
@@ -82,28 +83,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function cargarPerfil() {
       const { data: { user } } = await supabase.auth.getUser();
+
       if (!user) {
         router.replace('/login');
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('users')
-        .select('full_name, tenant_id, role, is_active, tenants(name)')
+        .select('full_name, role, is_active')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (!profile || profile.role !== 'admin' || profile.is_active === false) {
-        router.replace(profile?.role === 'resident' ? '/residente' : profile?.role === 'guard' ? '/guarda' : '/login');
+      if (error || !profile) {
+        console.error('No se pudo cargar el perfil administrativo:', error);
         return;
       }
 
-      if (profile) {
-        setNombreAdmin(profile.full_name || 'Administrador');
-        const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
-        if (tenantData?.name) setNombreConjunto('Pinar de la Fontana E3');
+      if (profile.role !== 'admin' || profile.is_active === false) {
+        router.replace(
+          profile.role === 'resident'
+            ? '/residente'
+            : profile.role === 'guard'
+              ? '/guarda'
+              : '/login'
+        );
+        return;
       }
+
+      setNombreAdmin(profile.full_name || 'Administrador');
+      setNombreConjunto('Pinar de la Fontana E3');
     }
+
     cargarPerfil();
   }, [router]);
 
@@ -132,7 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {isOpen && (
         <button
           type="button"
-          aria-label="Cerrar menú"
+          aria-label="Cerrar menÃº"
           className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
           onClick={() => setIsOpen(false)}
         />
@@ -150,7 +161,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <button
             type="button"
-            aria-label={isOpen ? 'Cerrar menú' : 'Expandir menú'}
+            aria-label={isOpen ? 'Cerrar menÃº' : 'Expandir menÃº'}
             onClick={() => setIsOpen(!isOpen)}
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:hidden"
           >
@@ -223,7 +234,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-4 md:hidden">
           <button
             type="button"
-            aria-label="Abrir menú"
+            aria-label="Abrir menÃº"
             onClick={() => setIsOpen(true)}
             className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100"
           >
@@ -238,3 +249,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+
