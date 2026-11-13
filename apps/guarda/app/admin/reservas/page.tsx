@@ -336,7 +336,7 @@ export default function AdminReservas() {
                         </>
                       )}
                       {r.status === 'approved' && (
-                        <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
+                        <button type="button" disabled={procesandoReserva !== null || procesandoPago !== null} onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium disabled:opacity-50">{procesandoReserva === r.id ? 'Procesando...' : 'Cancelar'}</button>
                       )}
                       {['cancelled','rejected'].includes(r.status) && (
                         <div className="min-w-36 space-y-2">
