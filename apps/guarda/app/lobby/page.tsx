@@ -72,7 +72,7 @@ export default function LobbyPage() {
           throw new Error(`No fue posible consultar el modelo de vivienda: ${tenantError.message}`);
         }
 
-        const model = (tenant?.housing_model || 'units') as HousingModel;
+        const model = (tenant?.housing_model || 'houses') as HousingModel;
 
         // Fallback compatible mientras housing_model no exista en la BD.
         if (!cancelled) setHousingModel(model);
