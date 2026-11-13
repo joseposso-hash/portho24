@@ -23,7 +23,7 @@ export default function AdminReservas() {
 
     const { data } = await supabase
       .from('reservas')
-      .select('*, areas_comunes(name, icon), units(code, towers(name))')
+      .select('*, areas_comunes(name, icon), units(code, towers(name)), reserva_movimientos_financieros(*)')
       .eq('tenant_id', profile.tenant_id) // <-- FILTRO
       .order('date', { ascending: false });
     if (data) setReservas(data);
@@ -45,6 +45,19 @@ export default function AdminReservas() {
     cargarReservas();
   }
 
+  async function validarPago(id: string, aprobado: boolean) {
+    const { error } = await supabase
+      .from('reserva_movimientos_financieros')
+      .update({ verification_status: aprobado ? 'confirmed' : 'rejected' })
+      .eq('id', id);
+
+    if (error) {
+      alert('No fue posible actualizar el pago: ' + error.message);
+      return;
+    }
+    await cargarReservas();
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
       <header className="bg-white border-b border-slate-200 h-16 flex items-center px-8 justify-between sticky top-0 z-10">
@@ -61,14 +74,15 @@ export default function AdminReservas() {
                 <th className="px-6 py-4">Fecha / Hora</th>
                 <th className="px-6 py-4">Notas</th>
                 <th className="px-6 py-4">Estado</th>
+                <th className="px-6 py-4">Finanzas</th>
                 <th className="px-6 py-4">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Cargando...</td></tr>
               ) : reservas.length === 0 ? (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No hay reservas registradas.</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay reservas registradas.</td></tr>
               ) : (
                 reservas.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
@@ -94,6 +108,22 @@ export default function AdminReservas() {
                       }`}>
                         {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
                       </span>
+                    </td>
+                    <td className="px-6 py-3 text-xs">
+                      <p className="font-semibold text-slate-800">{Number(r.amount_due || 0).toLocaleString('es-CO')} {r.currency || 'COP'}</p>
+                      <p className="text-slate-500">Pagado: {Number(r.amount_paid || 0).toLocaleString('es-CO')}</p>
+                      <p className="text-slate-500">Saldo: {Math.max(0, Number(r.amount_due || 0) - Number(r.amount_paid || 0)).toLocaleString('es-CO')}</p>
+                      <p className="mt-1 font-medium">{r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}</p>
+                      {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.filter((m: any) => m.verification_status === 'pending').map((m: any) => (
+                        <div key={m.id} className="mt-2 rounded-lg bg-amber-50 p-2">
+                          <p className="mb-1">Pago reportado: {Number(m.amount).toLocaleString('es-CO')} · {m.payment_method || 'Medio no indicado'}</p>
+                          {m.reference && <p>Ref: {m.reference}</p>}
+                          <div className="mt-2 flex gap-2">
+                            <button onClick={() => validarPago(m.id, true)} className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800">Confirmar</button>
+                            <button onClick={() => validarPago(m.id, false)} className="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">Rechazar</button>
+                          </div>
+                        </div>
+                      ))}
                     </td>
                     <td className="px-6 py-3 flex gap-2">
                       {r.status === 'pending' && (
