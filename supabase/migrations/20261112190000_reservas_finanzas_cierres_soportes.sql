@@ -410,13 +410,14 @@ BEGIN
     END IF;
 
     PERFORM set_config('portho24.reserva_financial_write', 'on', true);
+    PERFORM set_config('portho24.reserva_financial_write', 'on', true);
     UPDATE public.reservas
     SET refund_status = CASE
       WHEN amount_paid > 0 THEN 'pending'
       ELSE 'not_applicable'
     END
-    WHERE id = NEW.id
-      AND payment_mode = 'prepaid';
+    WHERE id = NEW.id;
+    PERFORM set_config('portho24.reserva_financial_write', 'off', true);
     PERFORM set_config('portho24.reserva_financial_write', 'off', true);
   END IF;
   RETURN NEW;
