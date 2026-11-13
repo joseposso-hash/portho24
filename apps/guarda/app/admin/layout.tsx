@@ -82,7 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function cargarPerfil() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {\n        router.replace('/login');\n        return;\n      }
 
       const { data: profile } = await supabase
         .from('users')
