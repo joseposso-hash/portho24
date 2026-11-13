@@ -1761,12 +1761,17 @@ export default function ResidentePage() {
                         Estado financiero: {r.payment_status === 'paid' ? 'Pagado' : r.payment_status === 'partial' ? 'Pago parcial' : r.payment_status === 'not_required' ? 'Sin cobro' : 'Pendiente'}
                         {' · Modalidad: '}{r.payment_mode === 'prepaid' ? 'Anticipado' : r.payment_mode === 'account' ? 'Cargo a cuenta' : 'Sin costo'}
                       </p>
+                      {r.status === 'cancelled' && r.refund_status && r.refund_status !== 'not_applicable' && (
+                        <p className="mt-1 text-xs font-medium text-blue-700">
+                          Devolución: {r.refund_status === 'pending' ? 'Pendiente de gestión administrativa' : r.refund_status === 'partial' ? 'Parcial' : 'Completada'}
+                        </p>
+                      )}
                       {Array.isArray(r.reserva_movimientos_financieros) && r.reserva_movimientos_financieros.length > 0 && (
                         <div className="mt-3 border-t border-slate-100 pt-3">
                           <p className="mb-2 text-xs font-semibold text-slate-600">Movimientos</p>
                           {r.reserva_movimientos_financieros.map((movement: any) => (
                             <p key={movement.id} className="text-xs text-slate-500">
-                              {movement.movement_type === 'charge' ? 'Cargo a cuenta' : movement.movement_type === 'payment' ? 'Pago' : 'Ajuste'} · {Number(movement.amount).toLocaleString('es-CO')} · {movement.verification_status === 'confirmed' ? 'Confirmado' : movement.verification_status === 'rejected' ? 'Rechazado' : 'Pendiente de validación'}
+                              {movement.movement_type === 'charge' ? 'Cargo a cuenta' : movement.movement_type === 'charge_reversal' ? 'Reverso de cargo' : movement.movement_type === 'payment' ? 'Pago' : movement.movement_type === 'refund' || movement.movement_type === 'reversal' ? 'Devolución' : 'Ajuste'} · {Number(movement.amount).toLocaleString('es-CO')} · {movement.verification_status === 'confirmed' ? 'Confirmado' : movement.verification_status === 'rejected' ? 'Rechazado' : 'Pendiente de validación'}
                             </p>
                           ))}
                         </div>
