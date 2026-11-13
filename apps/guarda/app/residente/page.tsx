@@ -1127,7 +1127,7 @@ export default function ResidentePage() {
 
                   {notificacionesVisibles.length === 0 ? (
                     <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-500">
-                      {notificaciones.length === 0
+                      {notificacionesCorrespondencia.length === 0
                         ? 'No tienes notificaciones por el momento.'
                         : 'No tienes notificaciones pendientes de lectura.'}
                     </div>
