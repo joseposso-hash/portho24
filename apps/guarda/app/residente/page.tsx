@@ -2,6 +2,7 @@
 'use client';
 
 import { getHouseNumber } from '../lib/house-number';
+import { formatUnitLabel, resolveHousingModel } from '../lib/tenant-config';
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -811,7 +812,7 @@ export default function ResidentePage() {
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">
-                  {miUnidad.towers.tenants.name} - Casa {getHouseNumber(miUnidad.code)}
+                  {miUnidad.towers.tenants.name} - {formatUnitLabel(getHouseNumber(miUnidad.code), miUnidad.towers.name, resolveHousingModel(miUnidad.towers.tenant_id))}
                 </p>
               </div>
             </div>
