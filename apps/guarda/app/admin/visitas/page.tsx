@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import EvidenceImage from '../../components/EvidenceImage';
-import { formatUnitLabel, HousingModel } from '../../lib/tenant-config';
-
-const PINAR_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
+import { formatUnitLabel, type HousingModel } from '../../lib/tenant-config';
 
 export default function AdminVisitas() {
   const [visitas, setVisitas] = useState<any[]>([]);
@@ -53,7 +51,7 @@ export default function AdminVisitas() {
 
         const tenantId = profile.tenant_id;
 
-        let model: HousingModel = tenantId === PINAR_ID ? 'houses' : 'units';
+        let model: HousingModel = 'houses';
 
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
@@ -61,6 +59,7 @@ export default function AdminVisitas() {
           .eq('id', tenantId)
           .maybeSingle();
 
+        if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) throw tenantError;
         if (!tenantError && tenant?.housing_model) {
           model = tenant.housing_model as HousingModel;
         }

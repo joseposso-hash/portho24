@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getHouseNumber } from '../lib/house-number';
 import { supabase } from '../lib/supabase';
+import { formatUnitLabel, getHousingConfig, type HousingModel } from '../lib/tenant-config';
 
 const DOCUMENT_TYPES = [
   { value: 'electricity', label: 'Energía' },
@@ -14,7 +14,7 @@ const DOCUMENT_TYPES = [
   { value: 'other', label: 'Otro documento' },
 ];
 
-type Unit = { id: string; code: string; tower_id: string };
+type Unit = { id: string; code: string; tower_id: string; tower_name?: string };
 type Item = {
   id: string;
   unit_id: string;
@@ -54,16 +54,18 @@ export default function CorrespondenciaPage() {
   const [tenantId, setTenantId] = useState('');
   const [userId, setUserId] = useState('');
   const [units, setUnits] = useState<Unit[]>([]);
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
+  const housing = getHousingConfig(housingModel);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const [house, setHouse] = useState('');
+  const [receivingUnitId, setReceivingUnitId] = useState('');
   const [documents, setDocuments] = useState<string[]>([]);
   const [observations, setObservations] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [deliveryHouse, setDeliveryHouse] = useState('');
+  const [deliveryUnitId, setDeliveryUnitId] = useState('');
   const [pending, setPending] = useState<Item[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [recipient, setRecipient] = useState('');
@@ -85,13 +87,8 @@ export default function CorrespondenciaPage() {
     setHistoryDate(dateKeyInBogota(now.toISOString()));
   }, []);
 
-  const receivingUnit = units.find(
-    (u) => getHouseNumber(u.code) === house.trim()
-  );
-
-  const deliveryUnit = units.find(
-    (u) => getHouseNumber(u.code) === deliveryHouse.trim()
-  );
+  const receivingUnit = units.find((unit) => unit.id === receivingUnitId);
+  const deliveryUnit = units.find((unit) => unit.id === deliveryUnitId);
 
   function documentLabel(type: string) {
     return DOCUMENT_TYPES.find((d) => d.value === type)?.label || type;
@@ -109,7 +106,7 @@ export default function CorrespondenciaPage() {
 
   function houseLabel(unitId: string) {
     const unit = units.find((u) => u.id === unitId);
-    return unit ? `Casa ${getHouseNumber(unit.code)}` : 'Casa no identificada';
+    return unit ? formatUnitLabel(unit.code, unit.tower_name, housingModel) : 'Vivienda no identificada';
   }
 
   useEffect(() => {
@@ -135,15 +132,31 @@ export default function CorrespondenciaPage() {
           throw new Error('Esta pantalla está disponible únicamente para vigilancia activa.');
         }
 
+        const { data: tenant, error: tenantError } = await supabase
+          .from('tenants')
+          .select('housing_model')
+          .eq('id', profile.tenant_id)
+          .maybeSingle();
+
+        if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
+          throw tenantError;
+        }
+
+        const model = (tenant?.housing_model || 'houses') as HousingModel;
+
         const { data: towers, error: towerError } = await supabase
           .from('towers')
-          .select('id')
+          .select('id, name')
           .eq('tenant_id', profile.tenant_id);
 
         if (towerError) throw towerError;
 
-        const towerIds = (towers || []).map((t) => t.id);
+        const towerIds = (towers || []).map((tower) => tower.id);
         if (!towerIds.length) throw new Error('No hay torres registradas.');
+
+        const towerNames = new Map(
+          (towers || []).map((tower) => [tower.id, tower.name || ''])
+        );
 
         const { data: unitRows, error: unitError } = await supabase
           .from('units')
@@ -156,7 +169,11 @@ export default function CorrespondenciaPage() {
 
         setTenantId(profile.tenant_id);
         setUserId(user.id);
-        setUnits((unitRows || []) as Unit[]);
+        setHousingModel(model);
+        setUnits((unitRows || []).map((unit: any) => ({
+          ...unit,
+          tower_name: towerNames.get(unit.tower_id) || '',
+        })));
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'No fue posible cargar el módulo.');
       } finally {
@@ -174,7 +191,7 @@ export default function CorrespondenciaPage() {
     setMessage('');
 
     if (!receivingUnit) {
-      setError('Escribe un número de casa válido.');
+      setError(`Selecciona ${housing.article} válido.`);
       return;
     }
     if (!documents.length) {
@@ -185,7 +202,7 @@ export default function CorrespondenciaPage() {
     setSaving(true);
     try {
       // Los documentos tipo "other" pueden recibirse varias veces
-      // para una misma casa y período.
+      // para una misma vivienda y período.
       const documentsToValidate = documents.filter(
         (type) => type !== 'other'
       );
@@ -206,7 +223,7 @@ export default function CorrespondenciaPage() {
           const names = existing
             .map((item) => documentLabel(item.document_type))
             .join(', ');
-          throw new Error(`Ya están registrados para esta casa y período: ${names}.`);
+          throw new Error(`Ya están registrados para esta vivienda y período: ${names}.`);
         }
       }
       const records = documents.map((type) => ({
@@ -226,13 +243,13 @@ export default function CorrespondenciaPage() {
 
       if (insertError) {
         if (insertError.code === '23505') {
-          throw new Error('Uno de esos documentos ya fue registrado para esta casa y período.');
+          throw new Error('Uno de esos documentos ya fue registrado para esta vivienda y período.');
         }
         throw insertError;
       }
 
-      setMessage(`${documents.length} documento(s) recibido(s) para la casa ${getHouseNumber(receivingUnit.code)}.`);
-      setHouse('');
+      setMessage(`${documents.length} documento(s) recibido(s) para ${formatUnitLabel(receivingUnit.code, receivingUnit.tower_name, housingModel)}.`);
+      setReceivingUnitId('');
       setDocuments([]);
       setObservations('');
     } catch (e) {
@@ -252,7 +269,7 @@ export default function CorrespondenciaPage() {
     setSearched(false);
 
     if (!deliveryUnit) {
-      setError('Escribe un número de casa válido.');
+      setError('Selecciona la vivienda de destino.');
       return;
     }
 
@@ -270,7 +287,7 @@ export default function CorrespondenciaPage() {
       setPending((data || []) as Item[]);
       setSearched(true);
 
-      if (!data?.length) setMessage('Esta casa no tiene documentos pendientes de entrega.');
+      if (!data?.length) setMessage('Esta vivienda no tiene documentos pendientes de entrega.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No fue posible consultar los pendientes.');
     } finally {
@@ -338,7 +355,7 @@ export default function CorrespondenciaPage() {
         throw new Error('Los documentos cambiaron de estado, pero no se pudo registrar el historial de entrega. Revisa el historial antes de repetir la operación.');
       }
 
-      setMessage(`${updatedIds.length} documento(s) entregado(s) a ${recipient.trim()} en la casa ${getHouseNumber(deliveryUnit.code)}.`);
+      setMessage(`${updatedIds.length} documento(s) entregado(s) a ${recipient.trim()} en ${formatUnitLabel(deliveryUnit.code, deliveryUnit.tower_name, housingModel)}.`);
       setPending((current) => current.filter((item) => !updatedIds.includes(item.id)));
       setSelected([]);
       setRecipient('');
@@ -423,22 +440,27 @@ export default function CorrespondenciaPage() {
         {tab === 'recibir' && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="mb-1 text-lg font-bold text-slate-900">Recibir documentos</h2>
-            <p className="mb-5 text-sm text-slate-500">Registra las facturas y documentos que llegan para cada casa.</p>
+            <p className="mb-5 text-sm text-slate-500">Registra las facturas y documentos que llegan para cada vivienda.</p>
 
             <form onSubmit={receiveDocuments} className="space-y-5">
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">Número de casa</span>
-                <input
-                  value={house}
-                  onChange={(e) => setHouse(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  inputMode="numeric"
-                  placeholder="Ej. 24"
-                  className={inputClass}
+                <span className="text-sm font-semibold text-slate-700">{housing.singular} de destino</span>
+                <select
+                  value={receivingUnitId}
+                  onChange={(e) => setReceivingUnitId(e.target.value)}
+                          className={inputClass}
                   required
-                />
-                {house && (
-                  <span className={`mt-1 block text-xs ${receivingUnit ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {receivingUnit ? `Casa ${getHouseNumber(receivingUnit.code)} verificada` : 'No se encontró esa casa'}
+                >
+                  <option value="">Seleccionar {housing.article}</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {formatUnitLabel(unit.code, unit.tower_name, housingModel)}
+                    </option>
+                  ))}
+                </select>
+                {receivingUnitId && (
+                  <span className="mt-1 block text-xs text-emerald-700">
+                    {formatUnitLabel(receivingUnit?.code, receivingUnit?.tower_name, housingModel)} verificada
                   </span>
                 )}
               </label>
@@ -482,18 +504,25 @@ export default function CorrespondenciaPage() {
         {tab === 'entregar' && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="mb-1 text-lg font-bold text-slate-900">Entregar documentos</h2>
-            <p className="mb-5 text-sm text-slate-500">Consulta la casa, selecciona lo que se entrega y registra quién recibe.</p>
+            <p className="mb-5 text-sm text-slate-500">Consulta la vivienda, selecciona lo que se entrega y registra quién recibe.</p>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <label className="block flex-1">
-                <span className="text-sm font-semibold text-slate-700">Número de casa</span>
-                <input value={deliveryHouse} onChange={(e) => {
-                  setDeliveryHouse(e.target.value.replace(/\D/g, '').slice(0, 3));
+                <span className="text-sm font-semibold text-slate-700">{housing.singular} de destino</span>
+                <select value={deliveryUnitId} onChange={(e) => {
+                  setDeliveryUnitId(e.target.value);
                   setPending([]);
                   setSelected([]);
                   setSearched(false);
-                }} inputMode="numeric" placeholder="Ej. 24" className={inputClass} />
-                {deliveryHouse && <span className="mt-1 block text-xs text-slate-500">{deliveryUnit ? 'Casa verificada' : 'Casa no encontrada'}</span>}
+                }} className={inputClass}>
+                  <option value="">Seleccionar {housing.article}</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {formatUnitLabel(unit.code, unit.tower_name, housingModel)}
+                    </option>
+                  ))}
+                </select>
+                {deliveryUnitId && <span className="mt-1 block text-xs text-emerald-700">{formatUnitLabel(deliveryUnit?.code, deliveryUnit?.tower_name, housingModel)} verificada</span>}
               </label>
               <button onClick={searchPending} disabled={saving || !deliveryUnit} className="rounded-lg bg-[#1E3A5F] px-6 py-3 text-sm font-semibold text-white disabled:opacity-50">
                 {saving ? 'Consultando...' : 'Consultar pendientes'}
@@ -542,7 +571,7 @@ export default function CorrespondenciaPage() {
             )}
 
             {searched && pending.length === 0 && (
-              <div className="mt-6 rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-600">No hay documentos pendientes para esta casa.</div>
+              <div className="mt-6 rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-600">No hay documentos pendientes para esta vivienda.</div>
             )}
           </section>
         )}
@@ -568,7 +597,7 @@ export default function CorrespondenciaPage() {
               <input
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Buscar por casa o documento"
+                placeholder="Buscar por vivienda o documento"
                 className={inputClass}
               />
 

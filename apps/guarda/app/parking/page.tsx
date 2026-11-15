@@ -4,6 +4,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase';
+import { formatUnitLabel, type HousingModel } from '../lib/tenant-config';
 
 import { uploadEvidence } from '../lib/evidencias-client';
 type PaymentMethod = 'cash' | 'transfer' | 'card' | 'other';
@@ -24,11 +25,14 @@ function ParkingContent() {
   const nombreParam = searchParams.get('nombre');
   const docParam = searchParams.get('doc');
   const casaParam = searchParams.get('casa');
+  const unitIdParam = searchParams.get('unit_id');
 
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
+  const [units, setUnits] = useState<any[]>([]);
+  const [unitId, setUnitId] = useState('');
 
   const [placa, setPlaca] = useState('');
-  const [apto, setApto] = useState((casaParam || '').replace(/\D/g, '').slice(0, 3));
   const [conductor, setConductor] = useState(nombreParam || '');
   const [docConductor, setDocConductor] = useState(docParam || '');
   const [fotoConductor, setFotoConductor] = useState<File | null>(null);
@@ -62,8 +66,70 @@ function ParkingContent() {
         .eq('id', user.id)
         .single();
 
-      if (!error && profile?.tenant_id) {
-        setTenantId(profile.tenant_id);
+      if (error || !profile?.tenant_id) return;
+
+      const currentTenantId = profile.tenant_id as string;
+      setTenantId(currentTenantId);
+
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('housing_model')
+        .eq('id', currentTenantId)
+        .maybeSingle();
+
+      if (tenantError && !['42703', 'PGRST204'].includes(tenantError.code)) {
+        console.error('Error consultando modelo de vivienda:', tenantError);
+      } else if (!tenantError && tenant?.housing_model) {
+        setHousingModel(tenant.housing_model as HousingModel);
+      }
+
+      const { data: towers, error: towersError } = await supabase
+        .from('towers')
+        .select('id, name')
+        .eq('tenant_id', currentTenantId)
+        .order('name');
+
+      if (towersError) {
+        console.error('Error cargando torres:', towersError);
+        return;
+      }
+
+      const towerIds = (towers || []).map((tower: any) => tower.id);
+      const towerNames = new Map(
+        (towers || []).map((tower: any) => [tower.id, tower.name])
+      );
+
+      if (!towerIds.length) {
+        setUnits([]);
+        return;
+      }
+
+      const { data: unitData, error: unitsError } = await supabase
+        .from('units')
+        .select('id, code, tower_id')
+        .in('tower_id', towerIds)
+        .order('code');
+
+      if (unitsError) {
+        console.error('Error cargando viviendas:', unitsError);
+        return;
+      }
+
+      const availableUnits = (unitData || []).map((unit: any) => ({
+        ...unit,
+        towerName: towerNames.get(unit.tower_id) || '',
+      }));
+      setUnits(availableUnits);
+
+      if (unitIdParam && availableUnits.some((unit: any) => unit.id === unitIdParam)) {
+        setUnitId(unitIdParam);
+      } else if (casaParam) {
+        const normalized = casaParam.trim().toLowerCase();
+        const matches = availableUnits.filter((unit: any) =>
+          String(unit.code).toLowerCase() === normalized ||
+          formatUnitLabel(unit.code, unit.towerName, tenant?.housing_model || 'houses').toLowerCase() === normalized
+        );
+        if (matches.length === 1) setUnitId(matches[0].id);
       }
     }
 
@@ -188,7 +254,7 @@ function ParkingContent() {
 
   async function confirmarEntrada() {
     if (
-      !apto ||
+      !unitId ||
       !conductor.trim() ||
       !docConductor.trim() ||
       !fotoConductor ||
@@ -196,45 +262,25 @@ function ParkingContent() {
       !tenantId ||
       !vehiculo?.id
     ) {
-      setErrorMsg('Por favor, completa los datos y toma ambas fotos.');
+      setErrorMsg('Selecciona la vivienda de destino, completa los datos y toma ambas fotos.');
       return;
     }
 
-    const casaDestino = apto.trim();
-
-    if (
-      !/^\d{1,3}$/.test(casaDestino) ||
-      Number(casaDestino) < 1 ||
-      Number(casaDestino) > 460
-    ) {
-      setErrorMsg('Ingresa un número de casa válido entre 1 y 460.');
+    const selectedUnit = units.find((unit) => unit.id === unitId);
+    if (!selectedUnit) {
+      setErrorMsg('La vivienda seleccionada ya no está disponible. Actualiza e inténtalo nuevamente.');
       return;
     }
+    const destinoLabel = formatUnitLabel(
+      selectedUnit.code,
+      selectedUnit.towerName,
+      housingModel
+    );
 
     setErrorMsg(null);
     setLoading(true);
 
     try {
-      const { data: tower, error: towerError } = await supabase
-        .from('towers')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .single();
-
-      if (towerError || !tower) {
-        throw new Error('No se encontró la torre del conjunto.');
-      }
-
-      const { data: unit, error: unitError } = await supabase
-        .from('units')
-        .select('id')
-        .eq('tower_id', tower.id)
-        .eq('code', casaDestino)
-        .single();
-
-      if (unitError || !unit) {
-        throw new Error('La casa indicada no existe.');
-      }
 
       const urlConductor = await uploadEvidence(fotoConductor, 'conductor');
       const urlVehiculo = await uploadEvidence(fotoVehiculo, 'vehiculo');
@@ -244,12 +290,12 @@ function ParkingContent() {
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
-        unit_id: unit.id,
+        unit_id: selectedUnit.id,
         visit_id: visitIdParam || null,
         status: 'active',
         check_in_at: ahora,
         created_at: ahora,
-        notes: `Conductor: ${conductor.trim()} - Doc: ${docConductor.trim()} - Destino: Casa ${casaDestino}`,
+        notes: `Conductor: ${conductor.trim()} - Doc: ${docConductor.trim()} - Destino: ${destinoLabel}`,
         photo_url: urlVehiculo,
         driver_photo_url: urlConductor,
       });
@@ -257,7 +303,7 @@ function ParkingContent() {
       if (error) throw error;
 
       alert(
-        `Vehículo ingresado.\nConductor: ${conductor}\nDestino: Casa ${casaDestino}`
+        `Vehículo ingresado.\nConductor: ${conductor}\nDestino: ${destinoLabel}`
       );
 
       router.push('/');
@@ -764,7 +810,7 @@ function ParkingContent() {
                 }`}
               >
                 <span className="block font-semibold text-slate-800">
-                  Residente de la casa
+                  Residente de la vivienda
                 </span>
                 <span className="block text-sm text-slate-500">
                   Se solicitará autorización digital antes de registrar el
@@ -800,7 +846,7 @@ function ParkingContent() {
                   </select>
                 ) : (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    No hay residentes activos disponibles para esta casa. No se
+                    No hay residentes activos disponibles para esta vivienda. No se
                     puede solicitar un cobro a residente.
                   </div>
                 )}
@@ -869,21 +915,26 @@ function ParkingContent() {
             <div className="grid grid-cols-1 gap-4">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">
-                  Casa / Unidad Destino
+                  Vivienda de destino
                 </span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{1,3}"
-                  maxLength={3}
-                  value={apto}
-                  onChange={(e) =>
-                    setApto(e.target.value.replace(/\D/g, '').slice(0, 3))
-                  }
-                  placeholder="Número de casa (1-460)"
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900"
+                <select
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900"
                   required
-                />
+                >
+                  <option value="">Seleccionar vivienda</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {formatUnitLabel(unit.code, unit.towerName, housingModel)}
+                    </option>
+                  ))}
+                </select>
+                {!units.length && (
+                  <span className="mt-1 block text-xs text-amber-700">
+                    No hay viviendas disponibles para este conjunto.
+                  </span>
+                )}
               </label>
             </div>
 

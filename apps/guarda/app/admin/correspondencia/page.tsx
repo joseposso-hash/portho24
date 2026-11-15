@@ -3,14 +3,14 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getHousingConfig, formatUnitLabel } from '../../lib/tenant-config';
+import { getHousingConfig, formatUnitLabel, type HousingModel } from '../../lib/tenant-config';
 
 const DOCUMENT_TYPES: Record<string, string> = {
-  electricity: 'EnergÃ­a',
+  electricity: 'Energía',
   water: 'Agua',
   gas: 'Gas',
-  telecommunications: 'TelefonÃ­a / Internet',
-  television: 'TelevisiÃ³n',
+  telecommunications: 'Telefonía / Internet',
+  television: 'Televisión',
   other: 'Otro documento',
 };
 
@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  received: 'Recibido en porterÃ­a',
+  received: 'Recibido en portería',
   pickup_requested: 'Retiro solicitado',
   delivered: 'Entregado al residente',
   returned: 'Devuelto',
@@ -40,7 +40,7 @@ export default function AdminCorrespondencia() {
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [error, setError] = useState('');
-  const [housingModel, setHousingModel] = useState('units');
+  const [housingModel, setHousingModel] = useState<HousingModel>('houses');
 
   useEffect(() => {
     cargar();
@@ -71,9 +71,7 @@ export default function AdminCorrespondencia() {
       }
 
       const tenantId = profile.tenant_id;
-      let model = tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
-        ? 'houses'
-        : 'units';
+      let model: HousingModel = 'houses';
 
       const { data: tenantWithModel, error: tenantModelError } = await supabase
         .from('tenants')
@@ -81,8 +79,9 @@ export default function AdminCorrespondencia() {
         .eq('id', tenantId)
         .maybeSingle();
 
+      if (tenantModelError && !['42703', 'PGRST204'].includes(tenantModelError.code)) throw tenantModelError;
       if (!tenantModelError && tenantWithModel?.housing_model) {
-        model = tenantWithModel.housing_model;
+        model = tenantWithModel.housing_model as HousingModel;
       }
       setHousingModel(model);
 
@@ -163,7 +162,9 @@ export default function AdminCorrespondencia() {
       documento.includes(texto) ||
       item.period?.toLowerCase().includes(texto) ||
       item.units?.code?.toLowerCase().includes(texto) ||
-      String(item.units?.code || '').toLowerCase().includes(texto);
+      String(item.units?.code || '').toLowerCase().includes(texto) ||
+      item.units?.towers?.name?.toLowerCase().includes(texto) ||
+      formatUnitLabel(item.units?.code, item.units?.towers?.name, housingModel).toLowerCase().includes(texto);
 
     const coincideEstado =
       estadoFiltro === 'todos' || item.status === estadoFiltro;
@@ -311,7 +312,7 @@ export default function AdminCorrespondencia() {
                   <th className="p-4">Documento</th>
                   <th className="p-4">Proveedor</th>
                   <th className="p-4">PerÃ­odo</th>
-                  <th className="p-4">RecepciÃ³n</th>
+                  <th className="p-4">Recepción</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4">Detalle</th>
                 </tr>
