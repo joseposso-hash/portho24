@@ -126,16 +126,22 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = access.profile.tenant_id;
+    const housingModel = tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
+      ? 'houses'
+      : tenantId === '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7'
+        ? 'apartments'
+        : 'units';
 
     const { data: towers, error: towersError } = await supabaseAdmin
       .from('towers')
-      .select('id')
+      .select('id, name')
       .eq('tenant_id', tenantId);
 
     if (towersError) throw towersError;
 
+    const towerNames = new Map((towers || []).map((tower: { id: string; name: string }) => [tower.id, tower.name]));
     const towerIds = (towers || []).map((tower: { id: string }) => tower.id);
-    let units: any[] = [];
+    let units: Array<{ id: string; code: string; tower_id: string; tower_name: string }> = [];
 
     if (towerIds.length) {
       const { data, error } = await supabaseAdmin
@@ -144,7 +150,10 @@ export async function GET(request: NextRequest) {
         .in('tower_id', towerIds);
 
       if (error) throw error;
-      units = data || [];
+      units = (data || []).map((unit: { id: string; code: string; tower_id: string }) => ({
+        ...unit,
+        tower_name: towerNames.get(unit.tower_id) || '',
+      }));
     }
 
     const { data: residents, error: residentsError } = await supabaseAdmin
@@ -169,6 +178,7 @@ export async function GET(request: NextRequest) {
     if (historyError) throw historyError;
 
     return NextResponse.json({
+      housingModel,
       residents: residents || [],
       units,
       history: history || [],
