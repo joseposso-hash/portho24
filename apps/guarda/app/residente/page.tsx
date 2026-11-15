@@ -127,6 +127,7 @@ export default function ResidentePage() {
 
   const [miUnidad, setMiUnidad] = useState<any>(null);
   const [miTenantId, setMiTenantId] = useState<string | null>(null);
+  const esSantaColoma = miTenantId === '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7';
   const [nombreResidente, setNombreResidente] = useState('');
 
   // Correspondencia y notificaciones
@@ -769,7 +770,7 @@ export default function ResidentePage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Unidad no encontrada</h1>
           <p className="text-slate-600 mb-6">
-            No tienes una casa asignada. Contacta a la administración.
+            No tienes una unidad asignada. Contacta a la administración.
           </p>
           <button
             onClick={() => router.push('/login')}
@@ -811,7 +812,7 @@ export default function ResidentePage() {
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">
-                  {miUnidad.towers.tenants.name} - Casa {getHouseNumber(miUnidad.code)}
+                  {esSantaColoma ? `Torre ${miUnidad.towers.name} · Apto ${miUnidad.code}` : `${miUnidad.towers.tenants.name} - Casa ${getHouseNumber(miUnidad.code)}`}
                 </p>
               </div>
             </div>
@@ -1110,7 +1111,7 @@ export default function ResidentePage() {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Mi correspondencia</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  Consulta los documentos físicos recibidos por la portería para tu casa.
+                  {`Consulta los documentos físicos recibidos por la portería para ${esSantaColoma ? 'tu apartamento.' : 'tu casa.'}`}
                 </p>
               </div>
 
@@ -1501,7 +1502,7 @@ export default function ResidentePage() {
                   Cargos de parqueadero
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Consulta las autorizaciones y el estado de los pagos asociados a tu casa.
+                  {`Consulta las autorizaciones y el estado de los pagos asociados a ${esSantaColoma ? 'tu apartamento.' : 'tu casa.'}`}
                 </p>
               </div>
 
