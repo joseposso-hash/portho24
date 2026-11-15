@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 import { uploadEvidence } from '../lib/evidencias-client';
-import { formatUnitLabel, getHousingConfig, type HousingModel } from '../lib/tenant-config';
+import { formatUnitLabel, getHousingConfig, resolveHousingModel, formatTowerLabel, type HousingModel } from '../lib/tenant-config';
 
 const COURIERS = ['Amazon', 'DHL', 'Servientrega', 'MercadoLibre', 'FedEx', 'Otro'];
 
@@ -31,6 +31,7 @@ export default function LobbyPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
+  const [selectedTowerId, setSelectedTowerId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -68,10 +69,7 @@ export default function LobbyPage() {
           .eq('id', tenantId)
           .maybeSingle();
 
-        const model = (
-          tenant?.housing_model ||
-          (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
-        ) as HousingModel;
+        const model = resolveHousingModel(tenantId, tenant?.housing_model);
 
         // Fallback compatible mientras housing_model no exista en la BD.
         if (!cancelled) setHousingModel(model);
@@ -136,6 +134,16 @@ export default function LobbyPage() {
         return code.includes(normalizedSearch) || label.includes(normalizedSearch);
       })
     : [];
+
+  const availableTowers = Array.from(
+    new Map(units.map((unit) => [unit.tower_id, unit.towerName])).entries()
+  )
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+
+  const unitsForSelectedTower = units
+    .filter((unit) => unit.tower_id === selectedTowerId)
+    .sort((a, b) => a.code.localeCompare(b.code, 'es', { numeric: true }));
 
   const selectedUnit = units.find((unit) => unit.id === unitId);
 
@@ -267,6 +275,7 @@ export default function LobbyPage() {
                     setTracking('');
                     setUnitId('');
                     setUnitSearch('');
+                    setSelectedTowerId('');
                     setCourier(COURIERS[0]);
                     setErrorMsg(null);
                   }}
@@ -317,54 +326,105 @@ export default function LobbyPage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="mb-2 text-sm font-bold text-slate-800">Destinatario</p>
 
-                    <label className="block">
-                      <span className="text-xs font-medium text-slate-600">
-                        {housing.model === 'apartments' ? 'Torre y apartamento' : housing.singular}
-                      </span>
-                      <input
-                        type="text"
-                        value={unitSearch}
-                        onChange={(e) => {
-                          const value = e.target.value.slice(0, 60);
-                          setUnitSearch(value);
-                          setUnitId('');
-
-                          const exactMatches = units.filter(
-                            (unit) => String(unit.code).trim().toLowerCase() === value.trim().toLowerCase()
-                          );
-
-                          if (exactMatches.length === 1) setUnitId(exactMatches[0].id);
-                          setErrorMsg(null);
-                        }}
-                        placeholder={unitsLoading ? 'Cargando viviendas...' : housing.model === 'apartments' ? 'Ej. Torre 1 · Apartamento 101' : 'Ej. 24'}
-                        disabled={unitsLoading || units.length === 0}
-                        autoComplete="off"
-                        className={inputClass}
-                        required
-                      />
-                    </label>
-
-                    {unitsLoading && (
-                      <p className="mt-2 text-xs text-slate-500">Consultando las viviendas del conjunto...</p>
-                    )}
-
-                    {!unitsLoading && filteredUnits.length > 0 && !selectedUnit && (
-                      <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                        {filteredUnits.slice(0, 40).map((unit) => (
-                          <button
-                            key={unit.id}
-                            type="button"
-                            onClick={() => {
-                              setUnitId(unit.id);
-                              setUnitSearch(formatUnitLabel(unit.code, unit.towerName, housingModel));
+                    {housing.model === 'apartments' ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="text-xs font-medium text-slate-600">Torre</span>
+                          <select
+                            value={selectedTowerId}
+                            onChange={(e) => {
+                              setSelectedTowerId(e.target.value);
+                              setUnitId('');
                               setErrorMsg(null);
                             }}
-                            className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-100"
+                            disabled={unitsLoading || availableTowers.length === 0}
+                            className={inputClass}
+                            required
                           >
-                            {formatUnitLabel(unit.code, unit.towerName, housingModel)}
-                          </button>
-                        ))}
+                            <option value="">Seleccionar torre</option>
+                            {availableTowers.map((tower) => (
+                              <option key={tower.id} value={tower.id}>
+                                {formatTowerLabel(tower.name)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-xs font-medium text-slate-600">Apartamento</span>
+                          <select
+                            value={unitId}
+                            onChange={(e) => {
+                              setUnitId(e.target.value);
+                              setErrorMsg(null);
+                            }}
+                            disabled={unitsLoading || !selectedTowerId || unitsForSelectedTower.length === 0}
+                            className={inputClass}
+                            required
+                          >
+                            <option value="">Seleccionar apartamento</option>
+                            {unitsForSelectedTower.map((unit) => (
+                              <option key={unit.id} value={unit.id}>
+                                {unit.code}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </div>
+                    ) : (
+                      <>
+                        <label className="block">
+                          <span className="text-xs font-medium text-slate-600">{housing.singular}</span>
+                          <input
+                            type="text"
+                            value={unitSearch}
+                            onChange={(e) => {
+                              const value = e.target.value.slice(0, 60);
+                              setUnitSearch(value);
+                              setUnitId('');
+
+                              const exactMatches = units.filter(
+                                (unit) => String(unit.code).trim().toLowerCase() === value.trim().toLowerCase()
+                              );
+
+                              if (exactMatches.length === 1) setUnitId(exactMatches[0].id);
+                              setErrorMsg(null);
+                            }}
+                            placeholder={unitsLoading ? 'Cargando viviendas...' : 'Ej. 24'}
+                            disabled={unitsLoading || units.length === 0}
+                            autoComplete="off"
+                            className={inputClass}
+                            required
+                          />
+                        </label>
+
+                        {unitsLoading && (
+                          <p className="mt-2 text-xs text-slate-500">Consultando las viviendas del conjunto...</p>
+                        )}
+
+                        {!unitsLoading && filteredUnits.length > 0 && !selectedUnit && (
+                          <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                            {filteredUnits.slice(0, 40).map((unit) => (
+                              <button
+                                key={unit.id}
+                                type="button"
+                                onClick={() => {
+                                  setUnitId(unit.id);
+                                  setUnitSearch(formatUnitLabel(unit.code, unit.towerName, housingModel));
+                                  setErrorMsg(null);
+                                }}
+                                className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-100"
+                              >
+                                {formatUnitLabel(unit.code, unit.towerName, housingModel)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {unitsLoading && housing.model === 'apartments' && (
+                      <p className="mt-2 text-xs text-slate-500">Consultando torres y apartamentos del conjunto...</p>
                     )}
 
                     {selectedUnit && (

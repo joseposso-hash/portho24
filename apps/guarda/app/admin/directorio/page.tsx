@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getHousingConfig, HousingModel } from '../../lib/tenant-config';
+import { getHousingConfig, resolveHousingModel, HousingModel } from '../../lib/tenant-config';
 
 type Residente = {
   id: string;
@@ -78,10 +78,7 @@ export default function AdminDirectorio() {
           tenant = tenantWithModel;
         }
 
-        const model = (
-          tenant?.housing_model ||
-          (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
-        ) as HousingModel;
+        const model = resolveHousingModel(tenantId, tenant?.housing_model);
 
         const { data: torres, error: towersError } = await supabase
           .from('towers')

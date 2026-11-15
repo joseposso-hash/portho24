@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { formatUnitLabel, type HousingModel } from '../../lib/tenant-config';
+import { formatUnitLabel, resolveHousingModel, type HousingModel } from '../../lib/tenant-config';
 import EvidenceImage from '../../components/EvidenceImage';
 
 export default function AdminPaquetes() {
@@ -50,10 +50,7 @@ export default function AdminPaquetes() {
         .eq('id', tenantId)
         .maybeSingle();
 
-      const model = (
-        tenant?.housing_model ||
-        (tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30' ? 'houses' : 'units')
-      ) as HousingModel;
+      const model = resolveHousingModel(tenantId, tenant?.housing_model);
 
       setHousingModel(model);
 
