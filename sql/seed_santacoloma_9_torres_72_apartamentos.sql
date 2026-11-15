@@ -2,43 +2,43 @@
 -- Crea 9 torres y 8 apartamentos por torre (72 viviendas).
 --
 -- PREPARACION:
--- 1. Crear previamente el tenant de Santa Coloma desde el flujo administrativo autorizado.
--- 2. Aplicar sql/housing_model_multitenant.sql.
--- 3. Reemplazar el UUID de ejemplo por el tenant_id real de Santa Coloma.
--- 4. Revisar el patron de codigos 101-108 antes de ejecutar.
+-- 1. Aplicar primero sql/housing_model_multitenant.sql.
+-- 2. Confirmar que el nombre y la distribucion (9 x 8) son correctos.
+-- 3. Ejecutar este script en el proyecto Supabase de demostracion.
 --
 -- SEGURIDAD:
--- - Este script NO crea el tenant.
--- - Clasifica como apartments unicamente al tenant indicado si aun no tiene modelo.
--- - Rechaza un tenant que ya este clasificado como houses.
--- - No modifica ni elimina viviendas, torres, usuarios o registros existentes.
--- - Solo inserta torres/unidades faltantes para el tenant indicado.
--- - No ejecutar en produccion hasta confirmar el tenant_id.
+-- - Crea el tenant Santa Coloma con un UUID fijo e idempotente.
+-- - Clasifica unicamente ese tenant como apartments.
+-- - Rechaza conflictos con un tenant existente de otro nombre o modelo.
+-- - No modifica ni elimina tenants, viviendas, usuarios o registros existentes.
+-- - Solo inserta torres/unidades faltantes.
+-- - No crea usuarios ni credenciales.
 
 BEGIN;
 
 DO $$
 DECLARE
-  v_tenant_id uuid := '00000000-0000-0000-0000-000000000000';
+  v_tenant_id uuid := '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7';
   v_housing_model text;
+  v_tenant_name text;
   v_tower_count integer;
   v_unit_count integer;
 BEGIN
-  IF v_tenant_id = '00000000-0000-0000-0000-000000000000'::uuid THEN
-    RAISE EXCEPTION
-      'Configura v_tenant_id con el UUID real del tenant Santa Coloma antes de ejecutar.';
-  END IF;
+  -- Crear el tenant de demostracion una sola vez. El UUID fijo evita duplicados.
+  INSERT INTO public.tenants (id, name, type, address)
+  VALUES (v_tenant_id, 'Santa Coloma', 'residential', NULL)
+  ON CONFLICT (id) DO NOTHING;
 
-  -- Bloquea el tenant objetivo y solo completa el modelo si esta pendiente.
-  SELECT housing_model
-    INTO v_housing_model
+  -- Bloquear y verificar que el UUID no pertenezca a otro conjunto.
+  SELECT name, housing_model
+    INTO v_tenant_name, v_housing_model
   FROM public.tenants
   WHERE id = v_tenant_id
   FOR UPDATE;
 
-  IF NOT FOUND THEN
+  IF NOT FOUND OR v_tenant_name IS DISTINCT FROM 'Santa Coloma' THEN
     RAISE EXCEPTION
-      'No existe el tenant indicado. Este script no crea conjuntos.';
+      'El UUID reservado para Santa Coloma ya existe con otro nombre. No se modifico ningun otro conjunto.';
   END IF;
 
   IF v_housing_model IS NULL THEN
@@ -104,10 +104,10 @@ BEGIN
   FROM public.units u
   JOIN public.towers t ON t.id = u.tower_id
   WHERE t.tenant_id = v_tenant_id
-    AND t.name IN (
-      'Torre 1', 'Torre 2', 'Torre 3',
-      'Torre 4', 'Torre 5', 'Torre 6',
-      'Torre 7', 'Torre 8', 'Torre 9'
+    AND lower(trim(t.name)) IN (
+      'torre 1', 'torre 2', 'torre 3',
+      'torre 4', 'torre 5', 'torre 6',
+      'torre 7', 'torre 8', 'torre 9'
     )
     AND u.code IN ('101','102','103','104','105','106','107','108');
 
