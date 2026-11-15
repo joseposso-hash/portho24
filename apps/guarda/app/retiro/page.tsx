@@ -245,7 +245,7 @@ export default function RetiroPage() {
           <form onSubmit={handleBuscar} className="space-y-6">
             <div className="text-center">
               <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-4xl">
-                #
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/><path d="m9 16 2 2 4-4"/></svg>
               </div>
               <h2 className="text-xl font-semibold text-slate-900">
                 Validar entrega
@@ -378,3 +378,4 @@ export default function RetiroPage() {
     </div>
   );
 }
+
