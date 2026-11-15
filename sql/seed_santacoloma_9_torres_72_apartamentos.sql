@@ -9,6 +9,8 @@
 --
 -- SEGURIDAD:
 -- - Este script NO crea el tenant.
+-- - Clasifica como apartments unicamente al tenant indicado si aun no tiene modelo.
+-- - Rechaza un tenant que ya este clasificado como houses.
 -- - No modifica ni elimina viviendas, torres, usuarios o registros existentes.
 -- - Solo inserta torres/unidades faltantes para el tenant indicado.
 -- - No ejecutar en produccion hasta confirmar el tenant_id.
@@ -27,6 +29,7 @@ BEGIN
       'Configura v_tenant_id con el UUID real del tenant Santa Coloma antes de ejecutar.';
   END IF;
 
+  -- Bloquea el tenant objetivo y solo completa el modelo si esta pendiente.
   SELECT housing_model
     INTO v_housing_model
   FROM public.tenants
@@ -36,6 +39,14 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION
       'No existe el tenant indicado. Este script no crea conjuntos.';
+  END IF;
+
+  IF v_housing_model IS NULL THEN
+    UPDATE public.tenants
+    SET housing_model = 'apartments'
+    WHERE id = v_tenant_id
+      AND housing_model IS NULL;
+    v_housing_model := 'apartments';
   END IF;
 
   IF v_housing_model IS DISTINCT FROM 'apartments' THEN
