@@ -24,6 +24,17 @@ DECLARE
   v_tower_count integer;
   v_unit_count integer;
 BEGIN
+  -- Evitar crear un segundo tenant si el nombre ya existe con otro UUID.
+  IF EXISTS (
+    SELECT 1
+    FROM public.tenants
+    WHERE lower(trim(name)) = 'santa coloma'
+      AND id <> v_tenant_id
+  ) THEN
+    RAISE EXCEPTION
+      'Ya existe un tenant llamado Santa Coloma con otro UUID. Revisalo antes de continuar.';
+  END IF;
+
   -- Crear el tenant de demostracion una sola vez. El UUID fijo evita duplicados.
   INSERT INTO public.tenants (id, name, type, address)
   VALUES (v_tenant_id, 'Santa Coloma', 'residential', NULL)
