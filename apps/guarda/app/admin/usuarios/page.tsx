@@ -1,6 +1,7 @@
 'use client';
 
 import { formatUnitLabel, getHousingConfig, resolveHousingModel, type HousingModel } from '../../lib/tenant-config';
+import { getHouseNumber } from '../../lib/house-number';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -140,7 +141,7 @@ export default function AdminUsuarios() {
     () => new Map(
       unidades.map((unidad) => [
         unidad.id,
-        formatUnitLabel(unidad.code, unidad.towerName, housingModel),
+        formatUnitLabel(housingModel === 'houses' ? getHouseNumber(unidad.code) : unidad.code, unidad.towerName, housingModel),
       ])
     ),
     [unidades, housingModel]
@@ -409,7 +410,7 @@ export default function AdminUsuarios() {
 
                     return (
                       <option key={unidad.id} value={unidad.id} disabled={ocupada}>
-                        {formatUnitLabel(unidad.code, unidad.towerName, housingModel)}{ocupada ? ' — Ocupada' : ''}
+                        {formatUnitLabel(housingModel === 'houses' ? getHouseNumber(unidad.code) : unidad.code, unidad.towerName, housingModel)}{ocupada ? ' — Ocupada' : ''}
                       </option>
                     );
                   })}
