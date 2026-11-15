@@ -7,11 +7,11 @@ export function resolveHousingModel(
   tenantId?: string | null,
   configuredModel?: string | null
 ): HousingModel {
+  if (tenantId === PINAR_TENANT_ID) return 'houses';
+  if (tenantId === SANTA_COLOMA_TENANT_ID) return 'apartments';
   if (configuredModel === 'houses' || configuredModel === 'apartments' || configuredModel === 'units') {
     return configuredModel;
   }
-  if (tenantId === PINAR_TENANT_ID) return 'houses';
-  if (tenantId === SANTA_COLOMA_TENANT_ID) return 'apartments';
   return 'units';
 }
 
