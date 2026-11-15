@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
+import { resolveHousingModel } from '../../../lib/tenant-config';
 
 type ResultadoAutorizacion =
   | { error: string; status: 401 | 403 | 500 }
@@ -126,11 +127,14 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = access.profile.tenant_id;
-    const housingModel = tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
-      ? 'houses'
-      : tenantId === '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7'
-        ? 'apartments'
-        : 'units';
+    const { data: tenant, error: tenantError } = await supabaseAdmin
+      .from('tenants')
+      .select('housing_model')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (tenantError) throw tenantError;
+    const housingModel = resolveHousingModel(tenantId, tenant?.housing_model);
 
     const { data: towers, error: towersError } = await supabaseAdmin
       .from('towers')
