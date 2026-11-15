@@ -6,11 +6,11 @@ import { supabase } from '../../lib/supabase';
 import { getHousingConfig, formatUnitLabel } from '../../lib/tenant-config';
 
 const DOCUMENT_TYPES: Record<string, string> = {
-  electricity: 'EnergÃ­a',
+  electricity: 'Energía',
   water: 'Agua',
   gas: 'Gas',
-  telecommunications: 'TelefonÃ­a / Internet',
-  television: 'TelevisiÃ³n',
+  telecommunications: 'Telefonía / Internet',
+  television: 'Televisión',
   other: 'Otro documento',
 };
 
@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  received: 'Recibido en porterÃ­a',
+  received: 'Recibido en portería',
   pickup_requested: 'Retiro solicitado',
   delivered: 'Entregado al residente',
   returned: 'Devuelto',
@@ -51,7 +51,10 @@ export default function AdminCorrespondencia() {
     setError('');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         setItems([]);
         setError('No se encontró una sesión activa.');
@@ -71,22 +74,26 @@ export default function AdminCorrespondencia() {
       }
 
       const tenantId = profile.tenant_id;
-      let model = tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
-        ? 'houses'
-        : 'units';
 
-      const { data: tenantWithModel, error: tenantModelError } = await supabase
-        .from('tenants')
-        .select('housing_model')
-        .eq('id', tenantId)
-        .maybeSingle();
+      let model =
+        tenantId === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
+          ? 'houses'
+          : 'units';
+
+      const { data: tenantWithModel, error: tenantModelError } =
+        await supabase
+          .from('tenants')
+          .select('housing_model')
+          .eq('id', tenantId)
+          .maybeSingle();
 
       if (!tenantModelError && tenantWithModel?.housing_model) {
         model = tenantWithModel.housing_model;
       }
+
       setHousingModel(model);
 
-      // Se obtienen exclusivamente las viviendas pertenecientes al tenant.
+      // Se obtienen exclusivamente las torres pertenecientes al conjunto.
       const { data: towers, error: towersError } = await supabase
         .from('towers')
         .select('id')
@@ -101,6 +108,7 @@ export default function AdminCorrespondencia() {
         return;
       }
 
+      // Las unidades se limitan a las torres del conjunto identificado.
       const { data: units, error: unitsError } = await supabase
         .from('units')
         .select('id')
@@ -115,9 +123,13 @@ export default function AdminCorrespondencia() {
         return;
       }
 
+      // Se conserva la relación con units y towers para mostrar
+      // correctamente casa o torre y apartamento.
       const { data, error: itemsError } = await supabase
         .from('correspondence_items')
-        .select('id, unit_id, document_type, provider, period, observations, status, received_at, requested_at, delivered_at, delivered_to, units(code, towers(name))')
+        .select(
+          'id, unit_id, document_type, provider, period, observations, status, received_at, requested_at, delivered_at, delivered_to, units(code, towers(name))'
+        )
         .in('unit_id', unitIds)
         .order('received_at', { ascending: false })
         .limit(300);
@@ -127,7 +139,9 @@ export default function AdminCorrespondencia() {
       setItems(data || []);
     } catch (err: any) {
       console.error('Error cargando correspondencia:', err);
-      setError(err?.message || 'No fue posible cargar la correspondencia.');
+      setError(
+        err?.message || 'No fue posible cargar la correspondencia.'
+      );
       setItems([]);
     } finally {
       setLoading(false);
@@ -151,40 +165,6 @@ export default function AdminCorrespondencia() {
 
     setEventos(data || []);
   }
-
-  const filtrados = items.filter((item) => {
-    const texto = busqueda.trim().toLowerCase();
-    const documento = nombreDocumento(item.document_type).toLowerCase();
-
-    const coincideTexto =
-      !texto ||
-      item.provider?.toLowerCase().includes(texto) ||
-      item.document_type?.toLowerCase().includes(texto) ||
-      documento.includes(texto) ||
-      item.period?.toLowerCase().includes(texto) ||
-      item.units?.code?.toLowerCase().includes(texto) ||
-      String(item.units?.code || '').toLowerCase().includes(texto);
-
-    const coincideEstado =
-      estadoFiltro === 'todos' || item.status === estadoFiltro;
-
-    const coincideFecha =
-      !fechaFiltro || item.received_at?.slice(0, 10) === fechaFiltro;
-
-    return coincideTexto && coincideEstado && coincideFecha;
-  });
-
-  const pendientes = items.filter((item) =>
-    ['pending', 'pickup_requested'].includes(item.status)
-  ).length;
-
-  const solicitados = items.filter(
-    (item) => item.status === 'pickup_requested'
-  ).length;
-
-  const entregados = items.filter(
-    (item) => item.status === 'delivered'
-  ).length;
 
   function nombreDocumento(tipo: string) {
     return DOCUMENT_TYPES[tipo] || tipo || 'Documento';
@@ -219,6 +199,78 @@ export default function AdminCorrespondencia() {
     return estilos[status] || 'bg-slate-100 text-slate-700';
   }
 
+  function etiquetaVivienda(item: any) {
+    return formatUnitLabel(
+      item.units?.code,
+      item.units?.towers?.name,
+      housingModel
+    );
+  }
+
+  const filtrados = items.filter((item) => {
+    const texto = busqueda.trim().toLowerCase();
+
+    const documento = nombreDocumento(item.document_type).toLowerCase();
+
+    const codigoUnidad = String(item.units?.code || '').toLowerCase();
+
+    const nombreTorre = String(
+      item.units?.towers?.name || ''
+    ).toLowerCase();
+
+    const viviendaCompleta = String(
+      etiquetaVivienda(item) || ''
+    ).toLowerCase();
+
+    const proveedor = String(item.provider || '').toLowerCase();
+
+    const tipoDocumento = String(
+      item.document_type || ''
+    ).toLowerCase();
+
+    const periodo = String(item.period || '').toLowerCase();
+
+    const observaciones = String(
+      item.observations || ''
+    ).toLowerCase();
+
+    // La búsqueda permite encontrar por:
+    // - Código del apartamento o casa.
+    // - Nombre o número de torre.
+    // - Etiqueta completa de la vivienda.
+    // - Proveedor, documento, período u observaciones.
+    const coincideTexto =
+      !texto ||
+      proveedor.includes(texto) ||
+      tipoDocumento.includes(texto) ||
+      documento.includes(texto) ||
+      periodo.includes(texto) ||
+      codigoUnidad.includes(texto) ||
+      nombreTorre.includes(texto) ||
+      viviendaCompleta.includes(texto) ||
+      observaciones.includes(texto);
+
+    const coincideEstado =
+      estadoFiltro === 'todos' || item.status === estadoFiltro;
+
+    const coincideFecha =
+      !fechaFiltro || item.received_at?.slice(0, 10) === fechaFiltro;
+
+    return coincideTexto && coincideEstado && coincideFecha;
+  });
+
+  const pendientes = items.filter((item) =>
+    ['pending', 'pickup_requested'].includes(item.status)
+  ).length;
+
+  const solicitados = items.filter(
+    (item) => item.status === 'pickup_requested'
+  ).length;
+
+  const entregados = items.filter(
+    (item) => item.status === 'delivered'
+  ).length;
+
   return (
     <div className="min-h-full bg-slate-50">
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:px-8">
@@ -246,17 +298,25 @@ export default function AdminCorrespondencia() {
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-xl border bg-white p-5">
             <p className="text-sm text-slate-500">Pendientes</p>
-            <p className="text-3xl font-bold text-amber-600">{pendientes}</p>
+            <p className="text-3xl font-bold text-amber-600">
+              {pendientes}
+            </p>
           </div>
 
           <div className="rounded-xl border bg-white p-5">
-            <p className="text-sm text-slate-500">Retiros solicitados</p>
-            <p className="text-3xl font-bold text-blue-600">{solicitados}</p>
+            <p className="text-sm text-slate-500">
+              Retiros solicitados
+            </p>
+            <p className="text-3xl font-bold text-blue-600">
+              {solicitados}
+            </p>
           </div>
 
           <div className="rounded-xl border bg-white p-5">
             <p className="text-sm text-slate-500">Entregados</p>
-            <p className="text-3xl font-bold text-emerald-600">{entregados}</p>
+            <p className="text-3xl font-bold text-emerald-600">
+              {entregados}
+            </p>
           </div>
         </div>
 
@@ -264,7 +324,7 @@ export default function AdminCorrespondencia() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <input
               type="text"
-              placeholder="Buscar vivienda, proveedor o documento..."
+              placeholder="Buscar torre, apartamento, proveedor o documento..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm text-slate-900"
@@ -307,11 +367,13 @@ export default function AdminCorrespondencia() {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="p-4">{getHousingConfig(housingModel).singular}</th>
+                  <th className="p-4">
+                    {getHousingConfig(housingModel).singular}
+                  </th>
                   <th className="p-4">Documento</th>
                   <th className="p-4">Proveedor</th>
-                  <th className="p-4">PerÃ­odo</th>
-                  <th className="p-4">RecepciÃ³n</th>
+                  <th className="p-4">Período</th>
+                  <th className="p-4">Recepción</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4">Detalle</th>
                 </tr>
@@ -320,13 +382,19 @@ export default function AdminCorrespondencia() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                    <td
+                      colSpan={7}
+                      className="p-8 text-center text-slate-500"
+                    >
                       Cargando registros...
                     </td>
                   </tr>
                 ) : filtrados.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td
+                      colSpan={7}
+                      className="p-8 text-center text-slate-400"
+                    >
                       No hay correspondencia registrada.
                     </td>
                   </tr>
@@ -334,15 +402,20 @@ export default function AdminCorrespondencia() {
                   filtrados.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50">
                       <td className="p-4 font-semibold text-[#1E3A5F]">
-                        {formatUnitLabel(item.units?.code, item.units?.towers?.name, housingModel)}
+                        {etiquetaVivienda(item)}
                       </td>
 
                       <td className="p-4">
                         {nombreDocumento(item.document_type)}
                       </td>
 
-                      <td className="p-4">{item.provider || '-'}</td>
-                      <td className="p-4">{item.period || '-'}</td>
+                      <td className="p-4">
+                        {item.provider || '-'}
+                      </td>
+
+                      <td className="p-4">
+                        {item.period || '-'}
+                      </td>
 
                       <td className="p-4 text-xs">
                         {fecha(item.received_at)}
@@ -377,7 +450,9 @@ export default function AdminCorrespondencia() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-xl">
               <div className="flex items-center justify-between border-b p-5">
-                <h2 className="text-lg font-bold">Detalle del documento</h2>
+                <h2 className="text-lg font-bold">
+                  Detalle del documento
+                </h2>
 
                 <button
                   type="button"
@@ -388,14 +463,16 @@ export default function AdminCorrespondencia() {
                   className="text-xl text-slate-500 hover:text-slate-800"
                   aria-label="Cerrar detalle"
                 >
-                  âœ•
+                  ×
                 </button>
               </div>
 
               <div className="space-y-3 p-5 text-sm">
                 <p>
-                  <strong>{getHousingConfig(housingModel).singular}:</strong>{' '}
-                  {formatUnitLabel(seleccionado.units?.code, seleccionado.units?.towers?.name, housingModel)}
+                  <strong>
+                    {getHousingConfig(housingModel).singular}:
+                  </strong>{' '}
+                  {etiquetaVivienda(seleccionado)}
                 </p>
 
                 <p>
@@ -404,19 +481,23 @@ export default function AdminCorrespondencia() {
                 </p>
 
                 <p>
-                  <strong>Proveedor:</strong> {seleccionado.provider || '-'}
+                  <strong>Proveedor:</strong>{' '}
+                  {seleccionado.provider || '-'}
                 </p>
 
                 <p>
-                  <strong>PerÃ­odo:</strong> {seleccionado.period || '-'}
+                  <strong>Período:</strong>{' '}
+                  {seleccionado.period || '-'}
                 </p>
 
                 <p>
-                  <strong>Estado:</strong> {estadoTexto(seleccionado.status)}
+                  <strong>Estado:</strong>{' '}
+                  {estadoTexto(seleccionado.status)}
                 </p>
 
                 <p>
-                  <strong>Recibido:</strong> {fecha(seleccionado.received_at)}
+                  <strong>Recibido:</strong>{' '}
+                  {fecha(seleccionado.received_at)}
                 </p>
 
                 <p>
@@ -425,11 +506,13 @@ export default function AdminCorrespondencia() {
                 </p>
 
                 <p>
-                  <strong>Entregado:</strong> {fecha(seleccionado.delivered_at)}
+                  <strong>Entregado:</strong>{' '}
+                  {fecha(seleccionado.delivered_at)}
                 </p>
 
                 <p>
-                  <strong>Recibido por:</strong> {seleccionado.delivered_to || '-'}
+                  <strong>Recibido por:</strong>{' '}
+                  {seleccionado.delivered_to || '-'}
                 </p>
 
                 <p>
@@ -439,7 +522,9 @@ export default function AdminCorrespondencia() {
 
                 <hr className="border-slate-200" />
 
-                <h3 className="font-bold text-slate-800">Historial de movimientos</h3>
+                <h3 className="font-bold text-slate-800">
+                  Historial de movimientos
+                </h3>
 
                 {eventos.length === 0 ? (
                   <p className="text-slate-400">
@@ -475,4 +560,3 @@ export default function AdminCorrespondencia() {
     </div>
   );
 }
-
