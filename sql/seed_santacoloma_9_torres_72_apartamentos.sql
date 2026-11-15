@@ -77,10 +77,10 @@ BEGIN
   FROM public.towers t
   CROSS JOIN generate_series(1, 8) AS apartments(apartment_number)
   WHERE t.tenant_id = v_tenant_id
-    AND t.name IN (
-      'Torre 1', 'Torre 2', 'Torre 3',
-      'Torre 4', 'Torre 5', 'Torre 6',
-      'Torre 7', 'Torre 8', 'Torre 9'
+    AND lower(trim(t.name)) IN (
+      'torre 1', 'torre 2', 'torre 3',
+      'torre 4', 'torre 5', 'torre 6',
+      'torre 7', 'torre 8', 'torre 9'
     )
     AND NOT EXISTS (
       SELECT 1
@@ -93,10 +93,10 @@ BEGIN
     INTO v_tower_count
   FROM public.towers
   WHERE tenant_id = v_tenant_id
-    AND name IN (
-      'Torre 1', 'Torre 2', 'Torre 3',
-      'Torre 4', 'Torre 5', 'Torre 6',
-      'Torre 7', 'Torre 8', 'Torre 9'
+    AND lower(trim(name)) IN (
+      'torre 1', 'torre 2', 'torre 3',
+      'torre 4', 'torre 5', 'torre 6',
+      'torre 7', 'torre 8', 'torre 9'
     );
 
   SELECT count(*)
