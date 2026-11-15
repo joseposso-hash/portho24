@@ -886,7 +886,7 @@ export default function AdminResidentes() {
             {activeWithoutHouse.length > 0 && (
               <section className="rounded-xl border border-amber-200 bg-white p-4">
                 <h2 className="font-semibold text-slate-900">
-                  Cuentas activas sin casa asignada
+                  Cuentas activas sin {housingModel === 'houses' ? 'casa' : housingModel === 'apartments' ? 'apartamento' : 'vivienda'} asignada
                 </h2>
                 <div className="mt-3 space-y-3">
                   {activeWithoutHouse.map(residentCard)}
