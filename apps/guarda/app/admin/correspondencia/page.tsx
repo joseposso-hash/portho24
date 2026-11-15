@@ -6,11 +6,11 @@ import { supabase } from '../../lib/supabase';
 import { getHousingConfig, formatUnitLabel, type HousingModel } from '../../lib/tenant-config';
 
 const DOCUMENT_TYPES: Record<string, string> = {
-  electricity: 'EnergÃ­a',
+  electricity: 'Energía',
   water: 'Agua',
   gas: 'Gas',
-  telecommunications: 'TelefonÃ­a / Internet',
-  television: 'TelevisiÃ³n',
+  telecommunications: 'Telefonía / Internet',
+  television: 'Televisión',
   other: 'Otro documento',
 };
 
@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  received: 'Recibido en porterÃ­a',
+  received: 'Recibido en portería',
   pickup_requested: 'Retiro solicitado',
   delivered: 'Entregado al residente',
   returned: 'Devuelto',
@@ -312,7 +312,7 @@ export default function AdminCorrespondencia() {
                   <th className="p-4">Documento</th>
                   <th className="p-4">Proveedor</th>
                   <th className="p-4">PerÃ­odo</th>
-                  <th className="p-4">RecepciÃ³n</th>
+                  <th className="p-4">Recepción</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4">Detalle</th>
                 </tr>
