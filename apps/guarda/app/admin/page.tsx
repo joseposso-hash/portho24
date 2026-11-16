@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { formatUnitLabel } from '../lib/tenant-config';
+import { getHouseNumber } from '../lib/house-number';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -60,6 +60,7 @@ const grupos = [
     items: [
       { nombre: 'Residentes', detalle: 'Directorio de casas y residentes', href: '/admin/directorio', icon: 'users' as const, color: 'blue' },
       { nombre: 'Reservas', detalle: 'Administración de áreas comunes', href: '/admin/reservas', icon: 'calendar' as const, color: 'violet' },
+      { nombre: 'Áreas comunes', detalle: 'Configuración de espacios y disponibilidad', href: '/admin/areas', icon: 'home' as const, color: 'emerald' },
       { nombre: 'PQRS', detalle: 'Solicitudes y seguimiento', href: '/admin/pqrs', icon: 'clipboard' as const, color: 'rose' },
       { nombre: 'Comunicados', detalle: 'Novedades e información del conjunto', href: '/admin/comunicados', icon: 'megaphone' as const, color: 'amber' },
     ],
@@ -95,8 +96,6 @@ export default function AdminDashboard() {
   });
   const [ultimosPaquetes, setUltimosPaquetes] = useState<any[]>([]);
   const [visitasActivas, setVisitasActivas] = useState<any[]>([]);
-  const [nombreConjunto, setNombreConjunto] = useState('Mi Conjunto');
-  const [housingModel, setHousingModel] = useState('units');
 
   useEffect(() => {
     let mounted = true;
@@ -180,7 +179,7 @@ export default function AdminDashboard() {
         </div>
         <div className="hidden items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 sm:flex">
           <Icon name="home" size={16} />
-          {nombreConjunto}
+          Pinar de la Fontana E3
         </div>
       </header>
 
@@ -246,7 +245,7 @@ export default function AdminDashboard() {
                       <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><Icon name="package" /></div>}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-800">{p.courier || 'Paquete recibido'}</p>
-                      <p className="text-xs text-slate-500">{formatUnitLabel((p.units as any)?.code, (p.units as any)?.towers?.name, housingModel)}</p>
+                      <p className="text-xs text-slate-500">{(p.units as any)?.towers?.name} · Casa {getHouseNumber((p.units as any)?.code)}</p>
                     </div>
                   </div>
                 ))}
@@ -266,7 +265,7 @@ export default function AdminDashboard() {
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-700"><Icon name="user" /></div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-800">{(v.visitors as any)?.full_name || 'Visitante'}</p>
-                      <p className="text-xs text-slate-500">Visita a: {formatUnitLabel((v.units as any)?.code, (v.units as any)?.towers?.name, housingModel)}</p>
+                      <p className="text-xs text-slate-500">Visita a: {(v.units as any)?.towers?.name} · Casa {getHouseNumber((v.units as any)?.code)}</p>
                     </div>
                   </div>
                 ))}
@@ -277,4 +276,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

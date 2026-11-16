@@ -1,6 +1,5 @@
 'use client';
 
-import { formatUnitLabel, getHousingConfig, resolveHousingModel, type HousingModel } from '../../lib/tenant-config';
 import { getHouseNumber } from '../../lib/house-number';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -21,13 +20,11 @@ type Unidad = {
   id: string;
   code: string;
   tower_id: string;
-  towerName: string;
 };
 
 export default function AdminUsuarios() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [unidades, setUnidades] = useState<Unidad[]>([]);
-  const [housingModel, setHousingModel] = useState<HousingModel>('units');
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [actualizandoId, setActualizandoId] = useState<string | null>(null);
@@ -71,24 +68,14 @@ export default function AdminUsuarios() {
         throw new Error('No tienes permisos para administrar usuarios.');
       }
 
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .select('housing_model')
-        .eq('id', perfil.tenant_id)
-        .maybeSingle();
-
-      if (tenantError) throw tenantError;
-      const model = resolveHousingModel(perfil.tenant_id, tenant?.housing_model);
-
       const { data: towers, error: towersError } = await supabase
         .from('towers')
-        .select('id, name')
+        .select('id')
         .eq('tenant_id', perfil.tenant_id);
 
       if (towersError) throw towersError;
 
-      const towerIds = (towers || []).map((tower: { id: string; name: string }) => tower.id);
-      const towerNames = new Map((towers || []).map((tower: { id: string; name: string }) => [tower.id, tower.name || '']));
+      const towerIds = (towers || []).map((tower: { id: string }) => tower.id);
 
       let unidadesData: Unidad[] = [];
 
@@ -100,18 +87,14 @@ export default function AdminUsuarios() {
 
         if (unitsError) throw unitsError;
 
-        unidadesData = ((data || []) as Omit<Unidad, 'towerName'>[])
-          .map((unidad) => ({
-            ...unidad,
-            towerName: towerNames.get(unidad.tower_id) || '',
-          }))
-          .sort((a, b) => {
-            const towerCompare = a.towerName.localeCompare(b.towerName, 'es', { numeric: true });
-            return towerCompare || a.code.localeCompare(b.code, 'es', { numeric: true });
-          });
+        unidadesData = ((data || []) as Unidad[]).sort(
+          (a, b) => {
+            const numeroA = Number(a.code.replace(/\D/g, ''));
+            const numeroB = Number(b.code.replace(/\D/g, ''));
+            return numeroA - numeroB;
+          }
+        );
       }
-
-      setHousingModel(model);
 
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -135,31 +118,24 @@ export default function AdminUsuarios() {
     void cargarDatos();
   }, [cargarDatos]);
 
-  const housing = getHousingConfig(housingModel);
-
   const unidadesPorId = useMemo(
-    () => new Map(
-      unidades.map((unidad) => [
-        unidad.id,
-        formatUnitLabel(housingModel === 'houses' ? getHouseNumber(unidad.code) : unidad.code, unidad.towerName, housingModel),
-      ])
-    ),
-    [unidades, housingModel]
+    () => new Map(unidades.map((unidad) => [unidad.id, unidad.code])),
+    [unidades]
   );
 
   const usuariosFiltrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
 
     return usuarios.filter((usuario) => {
-      const vivienda = usuario.unit_id
-        ? unidadesPorId.get(usuario.unit_id) || ''
+      const codigoCasa = usuario.unit_id
+        ? getHouseNumber(unidadesPorId.get(usuario.unit_id) || '')
         : '';
 
       const coincideBusqueda =
         !termino ||
         usuario.full_name.toLowerCase().includes(termino) ||
         usuario.email.toLowerCase().includes(termino) ||
-        vivienda.toLowerCase().includes(termino);
+        codigoCasa.toLowerCase().includes(termino);
 
       const coincideRole =
         filtroRole === 'todos' || usuario.role === filtroRole;
@@ -181,7 +157,7 @@ export default function AdminUsuarios() {
 
     try {
       if (role === 'resident' && !unitId) {
-        throw new Error(`Selecciona ${housing.article} del residente.`);
+        throw new Error('Selecciona la casa del residente.');
       }
 
       const { data: sessionData, error: sessionError } =
@@ -391,7 +367,7 @@ export default function AdminUsuarios() {
             {role === 'resident' && (
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
-                  {housing.singular}
+                  Casa
                 </span>
                 <select
                   required
@@ -399,7 +375,7 @@ export default function AdminUsuarios() {
                   onChange={(event) => setUnitId(event.target.value)}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
                 >
-                  <option value="">Seleccionar {housing.singular.toLowerCase()}</option>
+                  <option value="">Seleccionar casa</option>
                   {unidades.map((unidad) => {
                     const ocupada = usuarios.some(
                       (usuario) =>
@@ -410,7 +386,7 @@ export default function AdminUsuarios() {
 
                     return (
                       <option key={unidad.id} value={unidad.id} disabled={ocupada}>
-                        {formatUnitLabel(housingModel === 'houses' ? getHouseNumber(unidad.code) : unidad.code, unidad.towerName, housingModel)}{ocupada ? ' — Ocupada' : ''}
+                        Casa {getHouseNumber(unidad.code)}{ocupada ? ' — Ocupada' : ''}
                       </option>
                     );
                   })}
@@ -420,7 +396,7 @@ export default function AdminUsuarios() {
 
             {role === 'guard' && (
               <div className="flex items-end text-sm text-slate-500">
-                Los guardias no requieren una vivienda asignada.
+                Los guardias no requieren una casa asignada.
               </div>
             )}
 
@@ -449,7 +425,7 @@ export default function AdminUsuarios() {
           <input
             value={busqueda}
             onChange={(event) => setBusqueda(event.target.value)}
-            placeholder={`Buscar por nombre, correo o ${housing.article}...`}
+            placeholder="Buscar por nombre, correo o casa..."
             className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
 
@@ -514,7 +490,7 @@ export default function AdminUsuarios() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">
                       {usuario.role === 'resident' && usuario.unit_id
-                        ? unidadesPorId.get(usuario.unit_id) || '—'
+                        ? `Casa ${unidadesPorId.get(usuario.unit_id) || '—'}`
                         : '—'}
                     </td>
                     <td className="px-4 py-3">

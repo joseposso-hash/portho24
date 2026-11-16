@@ -32,8 +32,10 @@ export default function AdminReservas() {
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
     let motivo = null;
-    if (nuevoEstado === 'rejected') {
-      motivo = prompt('Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
+    if (nuevoEstado === 'rejected' || nuevoEstado === 'cancelled') {
+      motivo = prompt(nuevoEstado === 'cancelled'
+        ? 'Indica el motivo de la cancelación:'
+        : 'Por favor, escribe el motivo del rechazo (ej: Salón ocupado, mantenimiento, etc.):');
       if (motivo === null) return;
       if (motivo.trim() === '') {
         alert('Debes escribir un motivo para rechazar la reserva.');
@@ -41,9 +43,14 @@ export default function AdminReservas() {
       }
     }
 
-    await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
-    cargarReservas();
+    const { error } = await supabase.from('reservas').update({ status: nuevoEstado, admin_notes: motivo }).eq('id', id);
+    if (error) {
+      alert('No fue posible actualizar la reserva: ' + error.message);
+      return;
+    }
+    await cargarReservas();
   }
+
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -92,7 +99,7 @@ export default function AdminReservas() {
                         r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 
                         'bg-red-100 text-red-800'
                       }`}>
-                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                        {r.status === 'pending' ? 'Pendiente' : r.status === 'approved' ? 'Aprobada' : r.status === 'cancelled' ? 'Cancelada' : 'Rechazada'}
                       </span>
                     </td>
                     <td className="px-6 py-3 flex gap-2">
@@ -100,7 +107,11 @@ export default function AdminReservas() {
                         <>
                           <button onClick={() => cambiarEstado(r.id, 'approved')} className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded hover:bg-emerald-200 font-medium">Aprobar</button>
                           <button onClick={() => cambiarEstado(r.id, 'rejected')} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 font-medium">Rechazar</button>
+                          <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
                         </>
+                      )}
+                      {r.status === 'approved' && (
+                        <button onClick={() => cambiarEstado(r.id, 'cancelled')} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">Cancelar</button>
                       )}
                     </td>
                   </tr>

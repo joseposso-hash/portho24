@@ -12,6 +12,7 @@ const MODULES = [
   { id: 'visitas',  label: 'Crear Visita',     icon: '👤', color: 'bg-indigo-600' },
   { id: 'scan',     label: 'Escanear QR',      icon: '📷', color: 'bg-purple-600' },
   { id: 'parking',  label: 'Vehículos',        icon: '🚗', color: 'bg-amber-600' },
+  { id: 'admin',    label: 'Central (Admin)',  icon: '\u{1F5A5}\uFE0F', color: 'bg-slate-800' },
 ];
 
 export default function GuardaHome() {
@@ -23,7 +24,7 @@ export default function GuardaHome() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        router.replace('/login');
+        router.push('/login');
       } else {
         setUser(session.user);
         cargarActividad();
@@ -35,12 +36,8 @@ export default function GuardaHome() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
-    const { data: profile } = await supabase.from('users').select('tenant_id, role, is_active').eq('id', user.id).single();
-    if (!profile || profile.role !== 'guard' || profile.is_active === false) {
-      await supabase.auth.signOut();
-      router.replace('/login');
-      return;
-    }
+    const { data: profile } = await supabase.from('users').select('tenant_id').eq('id', user.id).single();
+    if (!profile) return;
     const tId = profile.tenant_id;
 
     const [packs, visits, cars] = await Promise.all([
@@ -89,6 +86,7 @@ export default function GuardaHome() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/residente" target="_blank" className="text-xs font-medium text-[#1E3A5F] hover:underline bg-white px-3 py-2 rounded-lg shadow-sm">Ver App Residente ↗</Link>
           <button onClick={handleLogout} className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50">Salir</button>
         </div>
       </header>

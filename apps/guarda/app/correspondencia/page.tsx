@@ -15,16 +15,8 @@ const DOCUMENT_TYPES = [
   { value: 'other', label: 'Otro documento' },
 ];
 
-type Tower = {
-  id: string;
-  name: string;
-};
-
-type Unit = {
-  id: string;
-  code: string;
-  tower_id: string;
-};
+type Tower = { id: string; name: string };
+type Unit = { id: string; code: string; tower_id: string };
 
 type Item = {
   id: string;
@@ -64,9 +56,9 @@ export default function CorrespondenciaPage() {
   const [tab, setTab] = useState<Tab>('recibir');
   const [tenantId, setTenantId] = useState('');
   const [userId, setUserId] = useState('');
-  const [housingModel, setHousingModel] = useState('houses');
-  const [towers, setTowers] = useState<Tower[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [towers, setTowers] = useState<Tower[]>([]);
+  const [housingModel, setHousingModel] = useState('units');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -96,80 +88,49 @@ export default function CorrespondenciaPage() {
 
   const [period, setPeriod] = useState('');
 
-  const isHouseModel = housingModel === 'houses';
+  useEffect(() => {
+    const now = new Date();
+    setPeriod(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    setHistoryDate(dateKeyInBogota(now.toISOString()));
+  }, []);
 
-  const receivingUnitsByTower = units.filter(
-    (unit) => unit.tower_id === receiveTowerId
-  );
+  const receivingUnit =
+    housingModel === 'houses'
+      ? units.find((u) => getHouseNumber(u.code) === house.trim())
+      : units.find((u) => u.id === receiveUnitId && u.tower_id === receiveTowerId);
 
-  const deliveryUnitsByTower = units.filter(
-    (unit) => unit.tower_id === deliveryTowerId
-  );
+  const deliveryUnit =
+    housingModel === 'houses'
+      ? units.find((u) => getHouseNumber(u.code) === deliveryHouse.trim())
+      : units.find((u) => u.id === deliveryUnitId && u.tower_id === deliveryTowerId);
 
-  const receivingUnit = isHouseModel
-    ? units.find((unit) => getHouseNumber(unit.code) === house.trim())
-    : units.find(
-        (unit) =>
-          unit.id === receiveUnitId &&
-          unit.tower_id === receiveTowerId
-      );
+  function unitLabel(unit: Unit) {
+    if (housingModel === 'houses') {
+      return `Casa ${getHouseNumber(unit.code)}`;
+    }
 
-  const deliveryUnit = isHouseModel
-    ? units.find((unit) => getHouseNumber(unit.code) === deliveryHouse.trim())
-    : units.find(
-        (unit) =>
-          unit.id === deliveryUnitId &&
-          unit.tower_id === deliveryTowerId
-      );
+    const tower = towers.find((t) => t.id === unit.tower_id);
+    return `Torre ${tower?.name || 'sin identificar'} · Apto ${unit.code}`;
+  }
 
   function documentLabel(type: string) {
-    return DOCUMENT_TYPES.find((document) => document.value === type)?.label || type;
+    return DOCUMENT_TYPES.find((d) => d.value === type)?.label || type;
   }
 
   function formatPeriod(value: string | null) {
     if (!value) return 'Sin período';
-
     const [year, month] = value.split('-').map(Number);
-
     if (!year || !month) return value;
-
     return new Date(year, month - 1, 15).toLocaleDateString('es-CO', {
       month: 'long',
       year: 'numeric',
     });
   }
 
-  function unitLabel(unit: Unit | undefined) {
-    if (!unit) return 'Vivienda no identificada';
-
-    if (isHouseModel) {
-      return `Casa ${getHouseNumber(unit.code)}`;
-    }
-
-    const tower = towers.find((item) => item.id === unit.tower_id);
-    const towerName = tower?.name || 'Sin torre';
-
-    const formattedTower = /^torre\s/i.test(towerName)
-      ? towerName
-      : `Torre ${towerName}`;
-
-    return `${formattedTower} · Apto ${unit.code}`;
+  function houseLabel(unitId: string) {
+    const unit = units.find((u) => u.id === unitId);
+    return unit ? unitLabel(unit) : 'Vivienda no identificada';
   }
-
-  function unitLabelById(unitId: string) {
-    const unit = units.find((item) => item.id === unitId);
-    return unitLabel(unit);
-  }
-
-  useEffect(() => {
-    const now = new Date();
-
-    setPeriod(
-      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    );
-
-    setHistoryDate(dateKeyInBogota(now.toISOString()));
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,24 +157,9 @@ export default function CorrespondenciaPage() {
 
         if (profileError) throw profileError;
 
-        if (
-          !profile?.is_active ||
-          profile.role !== 'guard' ||
-          !profile.tenant_id
-        ) {
-          throw new Error(
-            'Esta pantalla está disponible únicamente para vigilancia activa.'
-          );
+        if (!profile?.is_active || profile.role !== 'guard' || !profile.tenant_id) {
+          throw new Error('Esta pantalla está disponible únicamente para vigilancia activa.');
         }
-
-        // El modelo se determina por la configuración del conjunto.
-        // Si la columna aún no está disponible, se conserva el modelo
-        // correspondiente al conjunto conocido o se usa el modelo de unidades.
-        let model =
-          profile.tenant_id ===
-          '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
-            ? 'houses'
-            : 'units';
 
         const { data: tenantData, error: tenantError } = await supabase
           .from('tenants')
@@ -221,9 +167,13 @@ export default function CorrespondenciaPage() {
           .eq('id', profile.tenant_id)
           .maybeSingle();
 
-        if (!tenantError && tenantData?.housing_model) {
-          model = tenantData.housing_model;
-        }
+        if (tenantError) throw tenantError;
+
+        const model =
+          tenantData?.housing_model ||
+          (profile.tenant_id === '4888dce4-b74a-491f-b7d6-f2d903f2fe30'
+            ? 'houses'
+            : 'units');
 
         const { data: towerRows, error: towerError } = await supabase
           .from('towers')
@@ -233,11 +183,10 @@ export default function CorrespondenciaPage() {
 
         if (towerError) throw towerError;
 
-        const availableTowers = (towerRows || []) as Tower[];
-        const towerIds = availableTowers.map((tower) => tower.id);
+        const towerIds = (towerRows || []).map((t) => t.id);
 
         if (!towerIds.length) {
-          throw new Error('No hay torres registradas para este conjunto.');
+          throw new Error('No hay torres registradas.');
         }
 
         const { data: unitRows, error: unitError } = await supabase
@@ -247,21 +196,16 @@ export default function CorrespondenciaPage() {
           .order('code');
 
         if (unitError) throw unitError;
-
         if (cancelled) return;
 
         setTenantId(profile.tenant_id);
         setUserId(user.id);
         setHousingModel(model);
-        setTowers(availableTowers);
+        setTowers((towerRows || []) as Tower[]);
         setUnits((unitRows || []) as Unit[]);
       } catch (e) {
         if (!cancelled) {
-          setError(
-            e instanceof Error
-              ? e.message
-              : 'No fue posible cargar el módulo.'
-          );
+          setError(e instanceof Error ? e.message : 'No fue posible cargar el módulo.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -282,9 +226,9 @@ export default function CorrespondenciaPage() {
 
     if (!receivingUnit) {
       setError(
-        isHouseModel
+        housingModel === 'houses'
           ? 'Escribe un número de casa válido.'
-          : 'Selecciona una torre y un apartamento válidos.'
+          : 'Selecciona una torre y un apartamento válido.'
       );
       return;
     }
@@ -299,9 +243,7 @@ export default function CorrespondenciaPage() {
     try {
       // Los documentos tipo "other" pueden recibirse varias veces
       // para una misma vivienda y período.
-      const documentsToValidate = documents.filter(
-        (type) => type !== 'other'
-      );
+      const documentsToValidate = documents.filter((type) => type !== 'other');
 
       if (documentsToValidate.length > 0) {
         const { data: existing, error: duplicateError } = await supabase
@@ -320,9 +262,7 @@ export default function CorrespondenciaPage() {
             .map((item) => documentLabel(item.document_type))
             .join(', ');
 
-          throw new Error(
-            `Ya están registrados para esta vivienda y período: ${names}.`
-          );
+          throw new Error(`Ya están registrados para esta vivienda y período: ${names}.`);
         }
       }
 
@@ -343,9 +283,7 @@ export default function CorrespondenciaPage() {
 
       if (insertError) {
         if (insertError.code === '23505') {
-          throw new Error(
-            'Uno de esos documentos ya fue registrado para esta vivienda y período.'
-          );
+          throw new Error('Uno de esos documentos ya fue registrado para esta vivienda y período.');
         }
 
         throw insertError;
@@ -362,9 +300,7 @@ export default function CorrespondenciaPage() {
       setObservations('');
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : 'No fue posible registrar los documentos.'
+        e instanceof Error ? e.message : 'No fue posible registrar los documentos.'
       );
     } finally {
       setSaving(false);
@@ -382,9 +318,9 @@ export default function CorrespondenciaPage() {
 
     if (!deliveryUnit) {
       setError(
-        isHouseModel
+        housingModel === 'houses'
           ? 'Escribe un número de casa válido.'
-          : 'Selecciona una torre y un apartamento válidos.'
+          : 'Selecciona una torre y un apartamento válido.'
       );
       return;
     }
@@ -408,15 +344,11 @@ export default function CorrespondenciaPage() {
       setSearched(true);
 
       if (!data?.length) {
-        setMessage(
-          `${unitLabel(deliveryUnit)} no tiene documentos pendientes de entrega.`
-        );
+        setMessage('Esta vivienda no tiene documentos pendientes de entrega.');
       }
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : 'No fue posible consultar los pendientes.'
+        e instanceof Error ? e.message : 'No fue posible consultar los pendientes.'
       );
     } finally {
       setSaving(false);
@@ -433,19 +365,14 @@ export default function CorrespondenciaPage() {
       return;
     }
 
-    const selectedItems = pending.filter((item) =>
-      selected.includes(item.id)
-    );
+    const selectedItems = pending.filter((item) => selected.includes(item.id));
 
     if (selectedItems.length !== selected.length) {
-      setError(
-        'La selección cambió. Consulta nuevamente los pendientes.'
-      );
+      setError('La selección cambió. Consulta nuevamente los pendientes.');
       return;
     }
 
     setDelivering(true);
-
     const deliveredAt = new Date().toISOString();
 
     try {
@@ -488,10 +415,7 @@ export default function CorrespondenciaPage() {
         .insert(events);
 
       if (eventError) {
-        console.error(
-          'Error registrando eventos de entrega:',
-          eventError
-        );
+        console.error('Error registrando eventos de entrega:', eventError);
 
         throw new Error(
           'Los documentos cambiaron de estado, pero no se pudo registrar el historial de entrega. Revisa el historial antes de repetir la operación.'
@@ -511,9 +435,7 @@ export default function CorrespondenciaPage() {
       setDeliveryNotes('');
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : 'No fue posible confirmar la entrega.'
+        e instanceof Error ? e.message : 'No fue posible confirmar la entrega.'
       );
     } finally {
       setDelivering(false);
@@ -539,9 +461,7 @@ export default function CorrespondenciaPage() {
       setHistory((data || []) as Item[]);
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : 'No fue posible cargar el historial.'
+        e instanceof Error ? e.message : 'No fue posible cargar el historial.'
       );
     } finally {
       setHistoryLoading(false);
@@ -549,25 +469,18 @@ export default function CorrespondenciaPage() {
   }
 
   useEffect(() => {
-    if (tab === 'historial' && tenantId) {
-      loadHistory();
-    }
+    if (tab === 'historial' && tenantId) loadHistory();
   }, [tab, tenantId]);
 
   const filteredHistory = history.filter((item) => {
     const matchesStatus =
       historyFilter === 'all' || item.status === historyFilter;
 
-    const search = historySearch.toLowerCase().trim();
+    const matchesUnit = houseLabel(item.unit_id)
+      .toLowerCase()
+      .includes(historySearch.toLowerCase().trim());
 
-    const matchesSearch =
-      !search ||
-      unitLabelById(item.unit_id).toLowerCase().includes(search) ||
-      documentLabel(item.document_type).toLowerCase().includes(search) ||
-      (item.observations || '').toLowerCase().includes(search) ||
-      (item.delivered_to || '').toLowerCase().includes(search);
-
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesUnit;
   });
 
   const tabs: { id: Tab; label: string }[] = [
@@ -589,9 +502,7 @@ export default function CorrespondenciaPage() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-5 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Correspondencia
-            </h1>
+            <h1 className="text-2xl font-bold text-slate-900">Correspondencia</h1>
             <p className="text-sm text-slate-500">
               Recepción y entrega de documentos en portería
             </p>
@@ -648,7 +559,7 @@ export default function CorrespondenciaPage() {
             </p>
 
             <form onSubmit={receiveDocuments} className="space-y-5">
-              {isHouseModel ? (
+              {housingModel === 'houses' ? (
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">
                     Número de casa
@@ -696,9 +607,7 @@ export default function CorrespondenciaPage() {
                       <option value="">Seleccionar torre</option>
                       {towers.map((tower) => (
                         <option key={tower.id} value={tower.id}>
-                          {/^\s*torre\s/i.test(tower.name)
-                            ? tower.name
-                            : `Torre ${tower.name}`}
+                          {tower.name}
                         </option>
                       ))}
                     </select>
@@ -713,28 +622,19 @@ export default function CorrespondenciaPage() {
                       value={receiveUnitId}
                       onChange={(e) => setReceiveUnitId(e.target.value)}
                       className={inputClass}
-                      required
                       disabled={!receiveTowerId}
+                      required
                     >
-                      <option value="">
-                        {receiveTowerId
-                          ? 'Seleccionar apartamento'
-                          : 'Primero selecciona una torre'}
-                      </option>
-
-                      {receivingUnitsByTower.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          Apto {unit.code}
-                        </option>
-                      ))}
+                      <option value="">Seleccionar apartamento</option>
+                      {units
+                        .filter((unit) => unit.tower_id === receiveTowerId)
+                        .map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.code}
+                          </option>
+                        ))}
                     </select>
                   </label>
-
-                  {receivingUnit && (
-                    <p className="text-xs font-medium text-emerald-700 sm:col-span-2">
-                      Vivienda seleccionada: {unitLabel(receivingUnit)}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -760,7 +660,7 @@ export default function CorrespondenciaPage() {
                           setDocuments((current) =>
                             e.target.checked
                               ? [...current, doc.value]
-                              : current.filter((value) => value !== doc.value)
+                              : current.filter((v) => v !== doc.value)
                           )
                         }
                       />
@@ -809,12 +709,11 @@ export default function CorrespondenciaPage() {
             </h2>
 
             <p className="mb-5 text-sm text-slate-500">
-              Consulta la vivienda, selecciona lo que se entrega y registra
-              quién recibe.
+              Consulta la vivienda, selecciona lo que se entrega y registra quién recibe.
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              {isHouseModel ? (
+              {housingModel === 'houses' ? (
                 <label className="block flex-1">
                   <span className="text-sm font-semibold text-slate-700">
                     Número de casa
@@ -842,8 +741,8 @@ export default function CorrespondenciaPage() {
                   )}
                 </label>
               ) : (
-                <div className="grid flex-1 gap-3 sm:grid-cols-2">
-                  <label className="block">
+                <>
+                  <label className="block flex-1">
                     <span className="text-sm font-semibold text-slate-700">
                       Torre
                     </span>
@@ -862,15 +761,13 @@ export default function CorrespondenciaPage() {
                       <option value="">Seleccionar torre</option>
                       {towers.map((tower) => (
                         <option key={tower.id} value={tower.id}>
-                          {/^\s*torre\s/i.test(tower.name)
-                            ? tower.name
-                            : `Torre ${tower.name}`}
+                          {tower.name}
                         </option>
                       ))}
                     </select>
                   </label>
 
-                  <label className="block">
+                  <label className="block flex-1">
                     <span className="text-sm font-semibold text-slate-700">
                       Apartamento
                     </span>
@@ -886,26 +783,17 @@ export default function CorrespondenciaPage() {
                       className={inputClass}
                       disabled={!deliveryTowerId}
                     >
-                      <option value="">
-                        {deliveryTowerId
-                          ? 'Seleccionar apartamento'
-                          : 'Primero selecciona una torre'}
-                      </option>
-
-                      {deliveryUnitsByTower.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          Apto {unit.code}
-                        </option>
-                      ))}
+                      <option value="">Seleccionar apartamento</option>
+                      {units
+                        .filter((unit) => unit.tower_id === deliveryTowerId)
+                        .map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.code}
+                          </option>
+                        ))}
                     </select>
                   </label>
-
-                  {deliveryUnit && (
-                    <p className="text-xs font-medium text-emerald-700 sm:col-span-2">
-                      Vivienda seleccionada: {unitLabel(deliveryUnit)}
-                    </p>
-                  )}
-                </div>
+                </>
               )}
 
               <button
@@ -918,10 +806,7 @@ export default function CorrespondenciaPage() {
             </div>
 
             {searched && pending.length > 0 && (
-              <form
-                onSubmit={deliverDocuments}
-                className="mt-6 space-y-5"
-              >
+              <form onSubmit={deliverDocuments} className="mt-6 space-y-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-slate-800">
                     Documentos pendientes
@@ -965,9 +850,7 @@ export default function CorrespondenciaPage() {
 
                         <span className="block text-xs text-slate-500">
                           Recibido:{' '}
-                          {new Date(item.received_at).toLocaleDateString(
-                            'es-CO'
-                          )}
+                          {new Date(item.received_at).toLocaleDateString('es-CO')}
                         </span>
 
                         {item.observations && (
@@ -1009,9 +892,7 @@ export default function CorrespondenciaPage() {
                 </label>
 
                 <button
-                  disabled={
-                    delivering || !selected.length || !recipient.trim()
-                  }
+                  disabled={delivering || !selected.length || !recipient.trim()}
                   className="w-full rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50"
                 >
                   {delivering
@@ -1058,7 +939,11 @@ export default function CorrespondenciaPage() {
               <input
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Buscar por vivienda o documento"
+                placeholder={
+                  housingModel === 'houses'
+                    ? 'Buscar por casa'
+                    : 'Buscar por torre o apartamento'
+                }
                 className={inputClass}
               />
 
@@ -1106,8 +991,7 @@ export default function CorrespondenciaPage() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className="font-semibold text-slate-800">
-                          {documentLabel(item.document_type)} ·{' '}
-                          {unitLabelById(item.unit_id)}
+                          {documentLabel(item.document_type)} · {houseLabel(item.unit_id)}
                         </p>
 
                         <p className="text-xs capitalize text-slate-500">
@@ -1136,15 +1020,13 @@ export default function CorrespondenciaPage() {
                     </div>
 
                     <p className="mt-2 text-xs text-slate-500">
-                      Recibido:{' '}
-                      {new Date(item.received_at).toLocaleString('es-CO')}
+                      Recibido: {new Date(item.received_at).toLocaleString('es-CO')}
                     </p>
 
                     {item.delivered_at && (
                       <p className="text-xs text-emerald-700">
-                        Entregado:{' '}
-                        {new Date(item.delivered_at).toLocaleString('es-CO')}{' '}
-                        · Recibió: {item.delivered_to || 'No especificado'}
+                        Entregado: {new Date(item.delivered_at).toLocaleString('es-CO')}
+                        {' · '}Recibió: {item.delivered_to || 'No especificado'}
                       </p>
                     )}
 

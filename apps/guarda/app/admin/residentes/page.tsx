@@ -1,11 +1,24 @@
+﻿
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getHouseNumber } from '../../lib/house-number';
+import { formatTowerLabel } from '../../lib/tenant-config';
 
 type HousingModel = 'houses' | 'apartments' | 'units';
-type Unit = { id: string; code: string; tower_id: string; tower_name: string };
+
+type Unit = {
+  id: string;
+  code: string;
+  tower_id: string;
+  tower?: string | null;
+};
+
+type Tower = {
+  id: string;
+  name: string;
+};
 
 type Resident = {
   id: string;
@@ -29,8 +42,8 @@ type History = {
 };
 
 type Draft = {
-  unitId: string;
   towerId: string;
+  unitId: string;
   householdRole: 'titular' | 'integrante';
 };
 
@@ -43,9 +56,8 @@ type EditDraft = {
 export default function AdminResidentes() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [housingModel, setHousingModel] = useState<HousingModel>('units');
-  const [inviteTowerId, setInviteTowerId] = useState('');
   const [history, setHistory] = useState<History[]>([]);
+  const [housingModel, setHousingModel] = useState<HousingModel>('units');
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   const [loading, setLoading] = useState(true);
@@ -65,6 +77,7 @@ export default function AdminResidentes() {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [towerId, setTowerId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [householdRole, setHouseholdRole] =
     useState<'titular' | 'integrante'>('titular');
@@ -75,22 +88,73 @@ export default function AdminResidentes() {
     phone: '',
   });
 
+  const isHouseModel = housingModel === 'houses';
+  const unitSingular = isHouseModel
+    ? 'casa'
+    : housingModel === 'apartments'
+      ? 'apartamento'
+      : 'vivienda';
+
+  const unitPlural = isHouseModel
+    ? 'casas'
+    : housingModel === 'apartments'
+      ? 'apartamentos'
+      : 'viviendas';
+
   const unitMap = useMemo(
     () => new Map(units.map((unit) => [unit.id, unit])),
     [units]
   );
-  const towers = useMemo(() => {
-    const unique = new Map<string, string>();
-    units.forEach((unit) => unique.set(unit.tower_id, unit.tower_name));
-    return Array.from(unique, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+
+  const towers = useMemo<Tower[]>(() => {
+    const map = new Map<string, string>();
+
+    for (const unit of units) {
+      if (unit.tower_id) {
+        map.set(
+          unit.tower_id,
+          unit.tower || `Torre ${unit.tower_id.slice(0, 6)}`
+        );
+      }
+    }
+
+    return Array.from(map, ([id, name]) => ({ id, name })).sort(
+      (a, b) => a.name.localeCompare(b.name, 'es', {
+        numeric: true,
+        sensitivity: 'base',
+      })
+    );
   }, [units]);
-  const unitLabel = useCallback((unit?: Unit | null) => {
-    if (!unit) return housingModel === 'houses' ? 'Casa' : housingModel === 'apartments' ? 'Apartamento' : 'Vivienda';
-    if (housingModel === 'houses') return `Casa ${getHouseNumber(unit.code)}`;
-    const apartment = `Apartamento ${unit.code}`;
-    const tower = unit.tower_name.toLowerCase().startsWith('torre') ? unit.tower_name : `Torre ${unit.tower_name}`;
-    return housingModel === 'apartments' ? `${tower} · ${apartment}` : apartment;
-  }, [housingModel]);
+
+  const formUnits = useMemo(
+    () =>
+      isHouseModel
+        ? units
+        : units.filter((unit) => unit.tower_id === towerId),
+    [units, towerId, isHouseModel]
+  );
+
+  const getUnitLabel = useCallback(
+    (unit: Unit | undefined) => {
+      if (!unit) return 'Unidad no disponible';
+
+      if (isHouseModel) {
+        return `Casa ${getHouseNumber(unit.code)}`;
+      }
+
+      const unitName =
+        housingModel === 'apartments'
+          ? `Apartamento ${unit.code}`
+          : `Vivienda ${unit.code}`;
+
+      if (housingModel === 'apartments' && unit.tower) {
+        return `${formatTowerLabel(unit.tower)} · ${unitName}`;
+      }
+
+      return unitName;
+    },
+    [housingModel, isHouseModel]
+  );
 
   const getToken = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -131,25 +195,49 @@ export default function AdminResidentes() {
 
     try {
       const data = await request('GET');
+      const loadedUnits = (data.units || []) as Unit[];
 
-      setResidents(data.residents || []);
-      setHousingModel(data.housingModel || 'units');
+      loadedUnits.sort((a, b) => {
+        const towerCompare = (a.tower || '').localeCompare(
+          b.tower || '',
+          'es',
+          { numeric: true, sensitivity: 'base' }
+        );
 
-      setUnits(
-        (data.units || []).sort((a: Unit, b: Unit) => {
-          const towerOrder = a.tower_name.localeCompare(b.tower_name, 'es', { numeric: true });
-          return towerOrder || a.code.localeCompare(b.code, 'es', { numeric: true });
-        })
+        if (towerCompare !== 0) return towerCompare;
+
+        return a.code.localeCompare(b.code, 'es', {
+          numeric: true,
+          sensitivity: 'base',
+        });
+      });
+
+      setHousingModel(
+        data.housingModel === 'houses' ||
+        data.housingModel === 'apartments' ||
+        data.housingModel === 'units'
+          ? data.housingModel
+          : 'units'
       );
 
+      setUnits(loadedUnits);
+      setResidents(data.residents || []);
       setHistory(data.history || []);
+
+      const loadedUnitMap = new Map(
+        loadedUnits.map((unit) => [unit.id, unit])
+      );
 
       const nextDrafts: Record<string, Draft> = {};
 
       for (const resident of (data.residents || []) as Resident[]) {
+        const assignedUnit = resident.unit_id
+          ? loadedUnitMap.get(resident.unit_id)
+          : undefined;
+
         nextDrafts[resident.id] = {
+          towerId: assignedUnit?.tower_id || '',
           unitId: resident.unit_id || '',
-          towerId: (data.units || []).find((unit: Unit) => unit.id === resident.unit_id)?.tower_id || '',
           householdRole: resident.household_role || 'integrante',
         };
       }
@@ -184,14 +272,18 @@ export default function AdminResidentes() {
     const term = search.trim().toLowerCase();
 
     return residents.filter((resident) => {
-      const house = resident.unit_id ? unitLabel(unitMap.get(resident.unit_id)) : '';
+      const unit = resident.unit_id
+        ? unitMap.get(resident.unit_id)
+        : undefined;
+
+      const unitLabel = getUnitLabel(unit).toLowerCase();
 
       const matchesSearch =
         !term ||
         resident.full_name.toLowerCase().includes(term) ||
         (resident.email || '').toLowerCase().includes(term) ||
         (resident.phone || '').toLowerCase().includes(term) ||
-        house.toLowerCase().includes(term);
+        unitLabel.includes(term);
 
       const matchesFilter =
         filter === 'todos' ||
@@ -200,7 +292,7 @@ export default function AdminResidentes() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [residents, search, filter, unitMap, unitLabel]);
+  }, [residents, search, filter, unitMap, getUnitLabel]);
 
   const visibleIds = useMemo(
     () => new Set(filteredResidents.map((resident) => resident.id)),
@@ -233,6 +325,11 @@ export default function AdminResidentes() {
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (!unitId) {
+      setError(`Selecciona ${isHouseModel ? 'una casa' : `un${housingModel === 'apartments' ? ' apartamento' : 'a vivienda'}`}.`);
+      return;
+    }
+
     setSaving(true);
     setError('');
     setMessage('');
@@ -251,8 +348,8 @@ export default function AdminResidentes() {
       setNombre('');
       setEmail('');
       setPhone('');
+      setTowerId('');
       setUnitId('');
-      setInviteTowerId('');
       setHouseholdRole('titular');
       setShowForm(false);
 
@@ -339,7 +436,9 @@ export default function AdminResidentes() {
     const draft = drafts[resident.id];
 
     if (!draft?.unitId) {
-      setError(housingModel === 'houses' ? 'Selecciona la casa para registrar el reingreso.' : 'Selecciona el apartamento para registrar el reingreso.');
+      setError(
+        `Selecciona ${isHouseModel ? 'la casa' : 'la torre y el apartamento'} para registrar el reingreso.`
+      );
       return;
     }
 
@@ -375,10 +474,10 @@ export default function AdminResidentes() {
   }
 
   async function closeHousehold(unit: Unit, houseResidents: Resident[]) {
-    const locationLabel = unitLabel(unit);
+    const unitLabel = getUnitLabel(unit);
 
     const confirmed = window.confirm(
-      `¿Finalizar la ocupación de ${locationLabel}?\n\nSe desactivarán ${houseResidents.length} cuenta(s) residente(s) activa(s), se cerrarán sus asignaciones y se conservará el historial.\n\nEsta operación no elimina cuentas ni registros históricos.`
+      `¿Finalizar la ocupación de ${unitLabel}?\n\nSe desactivarán ${houseResidents.length} cuenta(s) residente(s) activa(s), se cerrarán sus asignaciones y se conservará el historial.\n\nEsta operación no elimina cuentas ni registros históricos.`
     );
 
     if (!confirmed) return;
@@ -394,10 +493,7 @@ export default function AdminResidentes() {
         endReason: 'Cambio de ocupantes',
       });
 
-      setMessage(
-        result.message || `Ocupación de ${locationLabel} finalizada.`
-      );
-
+      setMessage(result.message || `Ocupación de ${unitLabel} finalizada.`);
       await load();
     } catch (err) {
       setError(
@@ -420,10 +516,14 @@ export default function AdminResidentes() {
     const isEditing = editingId === resident.id;
     const busy = busyId === resident.id;
     const draft = drafts[resident.id] || {
-      unitId: '',
       towerId: '',
+      unitId: '',
       householdRole: 'integrante' as const,
     };
+
+    const reentryUnits = isHouseModel
+      ? units
+      : units.filter((unit) => unit.tower_id === draft.towerId);
 
     return (
       <article
@@ -443,6 +543,11 @@ export default function AdminResidentes() {
                 {resident.phone && (
                   <p className="mt-1 text-sm text-slate-500">
                     Teléfono: {resident.phone}
+                  </p>
+                )}
+                {resident.unit_id && (
+                  <p className="mt-1 text-sm text-slate-600">
+                    {getUnitLabel(unitMap.get(resident.unit_id))}
                   </p>
                 )}
               </div>
@@ -495,14 +600,83 @@ export default function AdminResidentes() {
                 </p>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {housingModel === 'apartments' && <label className="text-xs font-medium text-slate-600">Torre<select value={draft.towerId} onChange={(event) => setDrafts((old) => ({ ...old, [resident.id]: { ...draft, towerId: event.target.value, unitId: '' } }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">Seleccionar torre</option>{towers.map((tower) => <option key={tower.id} value={tower.id}>{tower.name.toLowerCase().startsWith('torre') ? tower.name : `Torre ${tower.name}`}</option>)}</select></label>}
-                  <label className="text-xs font-medium text-slate-600">
-                    {housingModel === 'houses' ? 'Casa para el reingreso' : housingModel === 'apartments' ? 'Apartamento para el reingreso' : 'Vivienda para el reingreso'}
-                    <select value={draft.unitId} onChange={(event) => setDrafts((old) => ({ ...old, [resident.id]: { ...draft, unitId: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-                      <option value="">Seleccionar {housingModel === 'houses' ? 'casa' : housingModel === 'apartments' ? 'apartamento' : 'vivienda'}</option>
-                      {units.filter((unit) => housingModel !== 'apartments' || unit.tower_id === draft.towerId).map((unit) => <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>)}
-                    </select>
-                  </label>
+                  {isHouseModel ? (
+                    <label className="text-xs font-medium text-slate-600">
+                      Casa para el reingreso
+                      <select
+                        value={draft.unitId}
+                        onChange={(event) =>
+                          setDrafts((old) => ({
+                            ...old,
+                            [resident.id]: {
+                              ...draft,
+                              unitId: event.target.value,
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="">Seleccionar casa</option>
+                        {units.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            Casa {getHouseNumber(unit.code)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <>
+                      <label className="text-xs font-medium text-slate-600">
+                        Torre para el reingreso
+                        <select
+                          value={draft.towerId}
+                          onChange={(event) =>
+                            setDrafts((old) => ({
+                              ...old,
+                              [resident.id]: {
+                                ...draft,
+                                towerId: event.target.value,
+                                unitId: '',
+                              },
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Seleccionar torre</option>
+                          {towers.map((tower) => (
+                            <option key={tower.id} value={tower.id}>
+                              {formatTowerLabel(tower.name)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="text-xs font-medium text-slate-600">
+                        Apartamento para el reingreso
+                        <select
+                          value={draft.unitId}
+                          disabled={!draft.towerId}
+                          onChange={(event) =>
+                            setDrafts((old) => ({
+                              ...old,
+                              [resident.id]: {
+                                ...draft,
+                                unitId: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
+                        >
+                          <option value="">Seleccionar apartamento</option>
+                          {reentryUnits.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                              Apartamento {unit.code}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  )}
 
                   <label className="text-xs font-medium text-slate-600">
                     Rol en el hogar
@@ -637,7 +811,7 @@ export default function AdminResidentes() {
             Gestión de hogares
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Administración de titulares, integrantes y ocupación de las viviendas.
+            Administración de titulares, integrantes y ocupación de las {unitPlural}.
           </p>
         </div>
 
@@ -703,7 +877,7 @@ export default function AdminResidentes() {
           </h2>
 
           <p className="mb-4 text-sm text-slate-500">
-            Crea una cuenta individual para la persona que ocupará la vivienda.
+            Crea una cuenta individual para la persona que ocupará la unidad.
             Se enviará un correo para configurar su contraseña.
           </p>
 
@@ -741,14 +915,70 @@ export default function AdminResidentes() {
               />
             </label>
 
-            {housingModel === 'apartments' && <label className="text-sm font-medium text-slate-700">Torre<select required value={inviteTowerId} onChange={(event) => { setInviteTowerId(event.target.value); setUnitId(''); }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="">Seleccionar torre</option>{towers.map((tower) => <option key={tower.id} value={tower.id}>{tower.name.toLowerCase().startsWith('torre') ? tower.name : `Torre ${tower.name}`}</option>)}</select></label>}
-            <label className="text-sm font-medium text-slate-700">
-              {housingModel === 'houses' ? 'Casa' : housingModel === 'apartments' ? 'Apartamento' : 'Vivienda'}
-              <select required value={unitId} onChange={(event) => setUnitId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5">
-                <option value="">Seleccionar {housingModel === 'houses' ? 'casa' : housingModel === 'apartments' ? 'apartamento' : 'vivienda'}</option>
-                {units.filter((unit) => housingModel !== 'apartments' || unit.tower_id === inviteTowerId).map((unit) => <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>)}
-              </select>
-            </label>
+            {isHouseModel ? (
+              <label className="text-sm font-medium text-slate-700">
+                Casa
+                <select
+                  required
+                  value={unitId}
+                  onChange={(event) => setUnitId(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                >
+                  <option value="">Seleccionar casa</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      Casa {getHouseNumber(unit.code)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <>
+                <label className="text-sm font-medium text-slate-700">
+                  Torre
+                  <select
+                    required
+                    value={towerId}
+                    onChange={(event) => {
+                      setTowerId(event.target.value);
+                      setUnitId('');
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                  >
+                    <option value="">Seleccionar torre</option>
+                    {towers.map((tower) => (
+                      <option key={tower.id} value={tower.id}>
+                        {formatTowerLabel(tower.name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium text-slate-700">
+                  {housingModel === 'apartments' ? 'Apartamento' : 'Vivienda'}
+                  <select
+                    required
+                    disabled={!towerId}
+                    value={unitId}
+                    onChange={(event) => setUnitId(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 disabled:bg-slate-100"
+                  >
+                    <option value="">
+                      {towerId
+                        ? 'Seleccionar unidad'
+                        : 'Primero selecciona una torre'}
+                    </option>
+                    {formUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {housingModel === 'apartments'
+                          ? `Apartamento ${unit.code}`
+                          : `Vivienda ${unit.code}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
 
             <label className="text-sm font-medium text-slate-700">
               Rol en el hogar
@@ -768,7 +998,7 @@ export default function AdminResidentes() {
 
             <div className="md:col-span-2">
               <button
-                disabled={saving}
+                disabled={saving || !unitId}
                 className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving ? 'Enviando invitación...' : 'Enviar invitación y asignar'}
@@ -783,7 +1013,7 @@ export default function AdminResidentes() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={`Buscar nombre, correo, teléfono o ${housingModel === 'houses' ? 'casa' : housingModel === 'apartments' ? 'apartamento o torre' : 'vivienda'}...`}
+            placeholder={`Buscar nombre, correo, teléfono o ${unitSingular}...`}
             className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
 
@@ -817,7 +1047,6 @@ export default function AdminResidentes() {
         ) : (
           <div className="space-y-4 bg-slate-50 p-3 md:p-4">
             {occupiedHouses.map(({ unit, residents: houseResidents }) => {
-              const locationLabel = unitLabel(unit);
               const titular = houseResidents.find(
                 (resident) => resident.household_role === 'titular'
               );
@@ -833,7 +1062,7 @@ export default function AdminResidentes() {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
                     <div>
                       <h2 className="text-lg font-bold text-slate-900">
-                        {locationLabel}
+                        {getUnitLabel(unit)}
                       </h2>
                       <p className="text-xs text-slate-500">
                         {houseResidents.length} de 5 cuentas residentes activas
@@ -938,7 +1167,7 @@ export default function AdminResidentes() {
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="p-3">Residente</th>
-                    <th className="p-3">{housingModel === 'houses' ? 'Casa' : housingModel === 'apartments' ? 'Apartamento' : 'Vivienda'}</th>
+                    <th className="p-3">Unidad</th>
                     <th className="p-3">Rol</th>
                     <th className="p-3">Desde</th>
                     <th className="p-3">Hasta</th>
@@ -955,7 +1184,9 @@ export default function AdminResidentes() {
                         )?.full_name || 'Cuenta histórica'}
                       </td>
 
-                      <td className="p-3">{unitLabel(unitMap.get(item.unit_id))}</td>
+                      <td className="p-3">
+                        {getUnitLabel(unitMap.get(item.unit_id))}
+                      </td>
 
                       <td className="p-3">
                         {item.household_role === 'titular'

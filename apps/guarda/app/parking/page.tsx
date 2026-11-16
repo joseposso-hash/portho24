@@ -4,9 +4,11 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase';
-import { formatUnitLabel, getHousingConfig, resolveHousingModel, HousingModel } from '../lib/tenant-config';
-
 import { uploadEvidence } from '../lib/evidencias-client';
+import { formatUnitLabel, HousingModel } from '../lib/tenant-config';
+
+const PINAR_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
+
 type PaymentMethod = 'cash' | 'transfer' | 'card' | 'other';
 
 type ClosureInfo = {
@@ -32,10 +34,18 @@ function ParkingContent() {
   const [towers, setTowers] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [selectedTowerId, setSelectedTowerId] = useState('');
-  const [selectedUnitId, setSelectedUnitId] = useState(unitIdParam || '');
+  const [selectedUnitId, setSelectedUnitId] = useState('');
+
+  const isHouseModel = housingModel === 'houses';
+
+  const apartments = units.filter(
+    (unit) => unit.tower_id === selectedTowerId
+  );
 
   const [placa, setPlaca] = useState('');
-  const [apto, setApto] = useState((casaParam || '').replace(/\D/g, '').slice(0, 3));
+  const [apto, setApto] = useState(
+    (casaParam || '').replace(/\D/g, '').slice(0, 3)
+  );
   const [conductor, setConductor] = useState(nombreParam || '');
   const [docConductor, setDocConductor] = useState(docParam || '');
   const [fotoConductor, setFotoConductor] = useState<File | null>(null);
@@ -57,46 +67,119 @@ function ParkingContent() {
 
   useEffect(() => {
     async function init() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+          error: authError
+        } = await supabase.auth.getUser();
 
-      if (!user) return;
+        if (authError) throw authError;
+        if (!user) return;
 
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single();
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('tenant_id, is_active')
+          .eq('id', user.id)
+          .single();
 
-      if (!error && profile?.tenant_id) {
+        if (profileError) throw profileError;
+
+        if (!profile?.tenant_id || profile.is_active === false) {
+          throw new Error('El usuario no tiene un conjunto activo asignado.');
+        }
+
         const currentTenantId = profile.tenant_id;
         setTenantId(currentTenantId);
-        const { data: tenant } = await supabase.from('tenants').select('housing_model').eq('id', currentTenantId).maybeSingle();
-        const model = resolveHousingModel(currentTenantId, tenant?.housing_model);
-        setHousingModel(model);
-        const { data: towerRows, error: towersError } = await supabase.from('towers').select('id, name').eq('tenant_id', currentTenantId).order('name');
-        if (towersError) throw towersError;
-        const towerIds = (towerRows || []).map((tower: any) => tower.id);
-        setTowers(towerRows || []);
-        if (towerIds.length) {
-          const { data: unitRows, error: unitsError } = await supabase.from('units').select('id, code, tower_id').in('tower_id', towerIds).order('code');
-          if (unitsError) throw unitsError;
-          const towerNames = new Map((towerRows || []).map((tower: any) => [tower.id, tower.name]));
-          const loadedUnits = (unitRows || []).map((unit: any) => ({ ...unit, towerName: towerNames.get(unit.tower_id) || '' }));
-          setUnits(loadedUnits);
-          const incomingUnit = loadedUnits.find((unit: any) => unit.id === unitIdParam);
-          if (incomingUnit) {
-            setSelectedUnitId(incomingUnit.id);
-            setSelectedTowerId(incomingUnit.tower_id);
-            setApto(incomingUnit.code);
-          }
+
+        let model: HousingModel =
+          currentTenantId === PINAR_ID ? 'houses' : 'units';
+
+        const { data: tenant, error: tenantError } = await supabase
+          .from('tenants')
+          .select('housing_model')
+          .eq('id', currentTenantId)
+          .maybeSingle();
+
+        if (!tenantError && tenant?.housing_model) {
+          model = tenant.housing_model as HousingModel;
         }
+
+        setHousingModel(model);
+
+        const { data: towerData, error: towersError } = await supabase
+          .from('towers')
+          .select('id, name')
+          .eq('tenant_id', currentTenantId)
+          .order('name');
+
+        if (towersError) throw towersError;
+
+        const loadedTowers = towerData || [];
+        setTowers(loadedTowers);
+
+        const towerIds = loadedTowers.map((tower: any) => tower.id);
+        const towerNames = new Map(
+          loadedTowers.map((tower: any) => [tower.id, tower.name])
+        );
+
+        if (!towerIds.length) {
+          setUnits([]);
+          return;
+        }
+
+        const { data: unitData, error: unitsError } = await supabase
+          .from('units')
+          .select('id, code, tower_id')
+          .in('tower_id', towerIds)
+          .order('code');
+
+        if (unitsError) throw unitsError;
+
+        const loadedUnits = (unitData || []).map((unit: any) => ({
+          ...unit,
+          towerName: towerNames.get(unit.tower_id) || ''
+        }));
+
+        setUnits(loadedUnits);
+
+        if (unitIdParam) {
+          const visitUnit = loadedUnits.find(
+            (unit: any) => unit.id === unitIdParam
+          );
+
+          if (visitUnit) {
+            setSelectedUnitId(visitUnit.id);
+            setSelectedTowerId(visitUnit.tower_id);
+            setApto(String(visitUnit.code));
+          }
+        } else if (model === 'houses') {
+          const house = loadedUnits.find(
+            (unit: any) =>
+              String(unit.code) === String(casaParam || '').trim()
+          );
+
+          if (house) {
+            setSelectedUnitId(house.id);
+            setSelectedTowerId(house.tower_id);
+            setApto(String(house.code));
+          }
+        } else if (loadedTowers.length) {
+          setSelectedTowerId(loadedTowers[0].id);
+        }
+      } catch (error: any) {
+        console.error(
+          'Error cargando configuración de parqueadero:',
+          error
+        );
+        setErrorMsg(
+          error.message ||
+            'No fue posible cargar las viviendas del conjunto.'
+        );
       }
     }
 
     void init();
-  }, []);
+  }, [unitIdParam, casaParam]);
 
   function formatoDinero(valor: number) {
     return `$${valor.toLocaleString('es-CO')}`;
@@ -154,7 +237,7 @@ function ParkingContent() {
           .insert({
             tenant_id: tenantId,
             plate: placaUpper,
-            type: 'car',
+            type: 'car'
           })
           .select()
           .single();
@@ -204,7 +287,7 @@ function ParkingContent() {
 
       setVehiculo({
         ...veh,
-        activeSession,
+        activeSession
       });
     } catch (err: any) {
       setVehiculo(null);
@@ -216,60 +299,91 @@ function ParkingContent() {
 
   async function confirmarEntrada() {
     if (
-      (housingModel === 'apartments' ? !selectedUnitId : !apto.trim()) ||
-      !conductor.trim() || !docConductor.trim() || !fotoConductor || !fotoVehiculo ||
-      !tenantId || !vehiculo?.id
+      !conductor.trim() ||
+      !docConductor.trim() ||
+      !fotoConductor ||
+      !fotoVehiculo ||
+      !tenantId ||
+      !vehiculo?.id
     ) {
       setErrorMsg('Por favor, completa los datos y toma ambas fotos.');
       return;
     }
 
-    const casaDestino = apto.trim();
-    let unit: any = null;
-    if (housingModel === 'apartments') {
-      unit = units.find((item: any) => item.id === selectedUnitId && item.tower_id === selectedTowerId);
-      if (!unit) {
-        setErrorMsg('Selecciona una torre y un apartamento válidos.');
-        return;
-      }
-    } else {
-      if (!/^\d{1,3}$/.test(casaDestino) || Number(casaDestino) < 1 || Number(casaDestino) > 460) {
+    let unidadDestino: any = null;
+
+    if (isHouseModel) {
+      const houseCode = apto.trim();
+
+      if (
+        !/^\d{1,3}$/.test(houseCode) ||
+        Number(houseCode) < 1 ||
+        Number(houseCode) > 460
+      ) {
         setErrorMsg('Ingresa un número de casa válido entre 1 y 460.');
         return;
       }
-      unit = units.find((item: any) => item.code === casaDestino);
-      if (!unit) {
-        setErrorMsg('La vivienda indicada no existe en este conjunto.');
-        return;
-      }
+
+      unidadDestino = units.find(
+        (unit) => String(unit.code) === houseCode
+      );
+    } else {
+      unidadDestino = units.find(
+        (unit) =>
+          unit.id === selectedUnitId &&
+          unit.tower_id === selectedTowerId
+      );
     }
+
+    if (!unidadDestino) {
+      setErrorMsg(
+        isHouseModel
+          ? 'La casa indicada no existe en este conjunto.'
+          : 'Selecciona una torre y un apartamento válidos.'
+      );
+      return;
+    }
+
+    const destinoLabel = formatUnitLabel(
+      unidadDestino.code,
+      unidadDestino.towerName,
+      housingModel
+    );
 
     setErrorMsg(null);
     setLoading(true);
 
     try {
+      const urlConductor = await uploadEvidence(
+        fotoConductor,
+        'conductor'
+      );
 
-      const urlConductor = await uploadEvidence(fotoConductor, 'conductor');
-      const urlVehiculo = await uploadEvidence(fotoVehiculo, 'vehiculo');
+      const urlVehiculo = await uploadEvidence(
+        fotoVehiculo,
+        'vehiculo'
+      );
 
       const ahora = new Date().toISOString();
 
       const { error } = await supabase.from('parking_sessions').insert({
         tenant_id: tenantId,
         vehicle_id: vehiculo.id,
-        unit_id: unit.id,
+        unit_id: unidadDestino.id,
         visit_id: visitIdParam || null,
         status: 'active',
         check_in_at: ahora,
         created_at: ahora,
-        notes: `Conductor: ${conductor.trim()} - Doc: ${docConductor.trim()} - Destino: ${formatUnitLabel(unit.code, unit.towerName, housingModel)}`,
+        notes: `Conductor: ${conductor.trim()} - Doc: ${docConductor.trim()} - Destino: ${destinoLabel}`,
         photo_url: urlVehiculo,
-        driver_photo_url: urlConductor,
+        driver_photo_url: urlConductor
       });
 
       if (error) throw error;
 
-      alert(`Vehículo ingresado.\nConductor: ${conductor}\nDestino: ${formatUnitLabel(unit.code, unit.towerName, housingModel)}`);
+      alert(
+        `Vehículo ingresado.\nConductor: ${conductor}\nDestino: ${destinoLabel}`
+      );
 
       router.push('/');
     } catch (err: any) {
@@ -321,7 +435,7 @@ function ParkingContent() {
           p_session_id: sessionId,
           p_payer_type: payerType,
           p_payer_user_id:
-            payerType === 'resident' ? residentPayerId : null,
+            payerType === 'resident' ? residentPayerId : null
         }
       );
 
@@ -342,7 +456,7 @@ function ParkingContent() {
           sessionId,
           amountDue: 0,
           amountPaid: 0,
-          payerType,
+          payerType
         });
 
         alert('Salida registrada. Esta sesión no generó ningún cobro.');
@@ -354,7 +468,9 @@ function ParkingContent() {
         amountDue: total,
         amountPaid: 0,
         payerType,
-        residentName: residenteSeleccionado?.full_name || residenteSeleccionado?.email,
+        residentName:
+          residenteSeleccionado?.full_name ||
+          residenteSeleccionado?.email
       });
 
       setMontoPago(payerType === 'visitor' ? String(total) : '');
@@ -413,18 +529,21 @@ function ParkingContent() {
           p_amount: monto,
           p_payment_method: metodoPago,
           p_reference: referenciaPago.trim() || null,
-          p_notes: notasPago.trim() || 'Pago recibido en portería',
+          p_notes: notasPago.trim() || 'Pago recibido en portería'
         }
       );
 
       if (pagoError) throw pagoError;
 
       const nuevoPagado = cierreInfo.amountPaid + monto;
-      const nuevoSaldo = Math.max(0, cierreInfo.amountDue - nuevoPagado);
+      const nuevoSaldo = Math.max(
+        0,
+        cierreInfo.amountDue - nuevoPagado
+      );
 
       setCierreInfo({
         ...cierreInfo,
-        amountPaid: nuevoPagado,
+        amountPaid: nuevoPagado
       });
 
       setMontoPago(nuevoSaldo > 0 ? String(nuevoSaldo) : '');
@@ -533,14 +652,18 @@ function ParkingContent() {
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
               <div className="flex justify-between gap-3">
-                <span className="text-sm text-slate-600">Valor liquidado</span>
+                <span className="text-sm text-slate-600">
+                  Valor liquidado
+                </span>
                 <strong className="text-slate-900">
                   {formatoDinero(cierreInfo.amountDue)}
                 </strong>
               </div>
 
               <div className="flex justify-between gap-3">
-                <span className="text-sm text-slate-600">Pagos registrados</span>
+                <span className="text-sm text-slate-600">
+                  Pagos registrados
+                </span>
                 <strong className="text-emerald-700">
                   {formatoDinero(cierreInfo.amountPaid)}
                 </strong>
@@ -700,13 +823,13 @@ function ParkingContent() {
             )}
 
             <button
-  type="button"
-  onClick={limpiarBusqueda}
-  disabled={loading}
-  className="w-full rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50"
->
-  Finalizar y dejar saldo pendiente
-</button>
+              type="button"
+              onClick={limpiarBusqueda}
+              disabled={loading}
+              className="w-full rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Finalizar y dejar saldo pendiente
+            </button>
           </div>
         ) : vehiculo.activeSession ? (
           <div className="space-y-6">
@@ -775,7 +898,7 @@ function ParkingContent() {
                 }`}
               >
                 <span className="block font-semibold text-slate-800">
-                  Residente de la casa
+                  Residente de la vivienda
                 </span>
                 <span className="block text-sm text-slate-500">
                   Se solicitará autorización digital antes de registrar el
@@ -811,8 +934,8 @@ function ParkingContent() {
                   </select>
                 ) : (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    No hay residentes activos disponibles para esta casa. No se
-                    puede solicitar un cobro a residente.
+                    No hay residentes activos disponibles para esta vivienda.
+                    No se puede solicitar un cobro a residente.
                   </div>
                 )}
               </div>
@@ -878,28 +1001,76 @@ function ParkingContent() {
             )}
 
             <div className="grid grid-cols-1 gap-4">
-              {housingModel === 'apartments' ? (
+              {isHouseModel ? (
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">
+                    Casa Destino
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{1,3}"
+                    maxLength={3}
+                    value={apto}
+                    onChange={(e) =>
+                      setApto(
+                        e.target.value.replace(/\D/g, '').slice(0, 3)
+                      )
+                    }
+                    placeholder="Número de casa (1-460)"
+                    className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900"
+                    required
+                  />
+                </label>
+              ) : (
                 <>
                   <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Torre</span>
-                    <select value={selectedTowerId} onChange={(e) => { setSelectedTowerId(e.target.value); setSelectedUnitId(''); }} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required>
+                    <span className="text-sm font-medium text-slate-700">
+                      Torre Destino
+                    </span>
+                    <select
+                      value={selectedTowerId}
+                      onChange={(e) => {
+                        setSelectedTowerId(e.target.value);
+                        setSelectedUnitId('');
+                      }}
+                      disabled={loading || towers.length === 0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 disabled:bg-slate-100"
+                      required
+                    >
                       <option value="">Selecciona una torre</option>
-                      {towers.map((tower: any) => <option key={tower.id} value={tower.id}>{tower.name}</option>)}
+                      {towers.map((tower) => (
+                        <option key={tower.id} value={tower.id}>
+                          {tower.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
+
                   <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Apartamento</span>
-                    <select value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)} disabled={!selectedTowerId} className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900 disabled:bg-slate-100" required>
+                    <span className="text-sm font-medium text-slate-700">
+                      Apartamento Destino
+                    </span>
+                    <select
+                      value={selectedUnitId}
+                      onChange={(e) => setSelectedUnitId(e.target.value)}
+                      disabled={
+                        loading ||
+                        !selectedTowerId ||
+                        apartments.length === 0
+                      }
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 disabled:bg-slate-100"
+                      required
+                    >
                       <option value="">Selecciona un apartamento</option>
-                      {units.filter((unit: any) => unit.tower_id === selectedTowerId).map((unit: any) => <option key={unit.id} value={unit.id}>{unit.code}</option>)}
+                      {apartments.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.code}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </>
-              ) : (
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">{getHousingConfig(housingModel).singular} Destino</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9]{1,3}" maxLength={3} value={apto} onChange={(e) => setApto(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Número de casa (1-460)" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required />
-                </label>
               )}
             </div>
 
@@ -984,7 +1155,13 @@ function ParkingContent() {
             <button
               type="button"
               onClick={confirmarEntrada}
-              disabled={loading}
+              disabled={
+                loading ||
+                !tenantId ||
+                (isHouseModel
+                  ? !apto
+                  : !selectedTowerId || !selectedUnitId)
+              }
               className="w-full rounded-xl bg-blue-600 py-4 text-lg font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Registrando...' : 'Dar Entrada al Vehículo'}

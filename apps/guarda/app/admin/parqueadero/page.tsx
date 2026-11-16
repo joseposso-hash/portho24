@@ -20,6 +20,11 @@ type Session = {
   authorized_by: string | null;
   authorized_at: string | null;
   tariff_snapshot: unknown;
+  exemption_status: string | null;
+  exemption_reason: string | null;
+  exemption_requested_at: string | null;
+  exemption_reviewed_at: string | null;
+  exempted_amount: number | null;
 };
 
 type Payment = {
@@ -118,7 +123,7 @@ export default function AdminParqueaderoPage() {
           supabase
             .from('parking_sessions')
             .select(
-              'id, tenant_id, vehicle_id, unit_id, status, check_in_at, check_out_at, amount_due, amount_paid, payment_status, payer_type, payer_user_id, charge_authorization_status, authorized_by, authorized_at, tariff_snapshot'
+              'id, tenant_id, vehicle_id, unit_id, status, check_in_at, check_out_at, amount_due, amount_paid, payment_status, payer_type, payer_user_id, charge_authorization_status, authorized_by, authorized_at, tariff_snapshot, exemption_status, exemption_reason, exemption_requested_at, exemption_reviewed_at, exempted_amount'
             )
             .eq('tenant_id', idTenant)
             .order('check_in_at', { ascending: false })
@@ -200,6 +205,7 @@ export default function AdminParqueaderoPage() {
     Math.max(
       0,
       Number(s.amount_due || 0) -
+        Number(s.exempted_amount || 0) -
         totalPagadoSesion(s.id) +
         totalRevertidoSesion(s.id)
     );
@@ -225,6 +231,8 @@ export default function AdminParqueaderoPage() {
         coincideFiltro = s.charge_authorization_status === 'approved';
       if (filtro === 'rejected')
         coincideFiltro = s.charge_authorization_status === 'rejected';
+      if (filtro === 'exemption')
+        coincideFiltro = s.exemption_status === 'pending';
 
       return coincideTexto && coincideFiltro;
     });
@@ -244,6 +252,9 @@ export default function AdminParqueaderoPage() {
   const autorizacionesPendientes = sesiones.filter(
     (s) => s.charge_authorization_status === 'pending'
   ).length;
+  const exencionesPendientes = sesiones.filter(
+    (s) => s.exemption_status === 'pending'
+  ).length;
 
   const puedeCobrar = (s: Session) =>
     s.status !== 'active' &&
@@ -252,6 +263,27 @@ export default function AdminParqueaderoPage() {
     saldoSesion(s) > 0 &&
     (s.payer_type !== 'resident' ||
       s.charge_authorization_status === 'approved');
+
+  async function resolverExencion(s: Session, aprobar: boolean) {
+    const decision = aprobar ? 'aprobar' : 'rechazar';
+    if (!window.confirm(`¿Confirmas ${decision} la exención de ${placaDe(s.vehicle_id)}?`)) return;
+    setProcesando(true);
+    setError('');
+    setMensaje('');
+    try {
+      const { error: rpcError } = await supabase.rpc('resolve_parking_exemption', {
+        p_session_id: s.id,
+        p_approve: aprobar,
+      });
+      if (rpcError) throw rpcError;
+      setMensaje(`Solicitud de exención ${aprobar ? 'aprobada' : 'rechazada'}.`);
+      await cargarDatos();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No fue posible resolver la exención.');
+    } finally {
+      setProcesando(false);
+    }
+  }
 
   async function registrarPago(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -354,6 +386,8 @@ export default function AdminParqueaderoPage() {
       approved: 'Aprobada',
       rejected: 'Rechazada',
       not_required: 'No requiere',
+      not_requested: 'No solicitada',
+      pending_exemption: 'Exención pendiente',
     };
     return textos[estado || ''] || estado || 'Sin estado';
   };
@@ -399,6 +433,7 @@ export default function AdminParqueaderoPage() {
           ['Recaudo neto', money(recaudoNeto), 'Pagos menos reversiones'],
           ['Saldo pendiente', money(saldoPendiente), 'Saldo actual por cobrar'],
           ['Autorizaciones pendientes', String(autorizacionesPendientes), 'Esperando respuesta del residente'],
+          ['Exenciones pendientes', String(exencionesPendientes), 'Requieren decisión administrativa'],
         ].map(([titulo, valor, detalle]) => (
           <div key={titulo} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">{titulo}</p>
@@ -433,6 +468,7 @@ export default function AdminParqueaderoPage() {
             ['approval', 'Autorización pendiente'],
             ['approved', 'Autorizadas'],
             ['rejected', 'Rechazadas'],
+            ['exemption', 'Exenciones pendientes'],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -477,18 +513,35 @@ export default function AdminParqueaderoPage() {
                       <p className="text-slate-400">{date(s.check_out_at)}</p>
                     </td>
                     <td className="p-3 capitalize">{s.payer_type || '—'}</td>
-                    <td className="p-3">
+                    <td className="p-3 space-y-1">
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
                         {etiquetaEstado(s.charge_authorization_status)}
                       </span>
+                      {s.exemption_status && s.exemption_status !== 'not_requested' && (
+                        <div className="text-xs">
+                          <p className={`font-semibold ${s.exemption_status === 'approved' ? 'text-emerald-700' : s.exemption_status === 'rejected' ? 'text-red-700' : 'text-amber-700'}`}>
+                            Exención: {s.exemption_status === 'pending' ? 'Pendiente' : s.exemption_status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                          </p>
+                          {s.exemption_reason && <p className="max-w-[220px] text-slate-500">{s.exemption_reason}</p>}
+                          {s.exemption_requested_at && <p className="text-slate-400">{date(s.exemption_requested_at)}</p>}
+                        </div>
+                      )}
                     </td>
-                    <td className="p-3 text-right tabular-nums">{money(Number(s.amount_due || 0))}</td>
+                    <td className="p-3 text-right tabular-nums">
+                      <p>{money(Number(s.amount_due || 0))}</p>
+                      {Number(s.exempted_amount || 0) > 0 && <p className="text-xs text-emerald-700">Exonerado: {money(Number(s.exempted_amount || 0))}</p>}
+                    </td>
                     <td className="p-3 text-right tabular-nums">{money(pagado)}</td>
                     <td className={`p-3 text-right font-bold tabular-nums ${saldo > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       {money(saldo)}
                     </td>
                     <td className="p-3">
-                      {puedeCobrar(s) ? (
+                      {s.status === 'active' && s.exemption_status === 'pending' ? (
+                        <div className="flex flex-col gap-2">
+                          <button disabled={procesando} onClick={() => resolverExencion(s, true)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Aprobar exención</button>
+                          <button disabled={procesando} onClick={() => resolverExencion(s, false)} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Rechazar</button>
+                        </div>
+                      ) : puedeCobrar(s) ? (
                         <button
                           onClick={() => {
                             setSesionSeleccionada(s);

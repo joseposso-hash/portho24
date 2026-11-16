@@ -127,7 +127,6 @@ export default function ResidentePage() {
 
   const [miUnidad, setMiUnidad] = useState<any>(null);
   const [miTenantId, setMiTenantId] = useState<string | null>(null);
-  const esSantaColoma = miTenantId === '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7';
   const [nombreResidente, setNombreResidente] = useState('');
 
   // Correspondencia y notificaciones
@@ -255,11 +254,6 @@ export default function ResidentePage() {
         return;
       }
 
-      if (profile?.role !== 'resident' || profile.is_active === false) {
-        router.replace(profile?.role === 'admin' ? '/admin' : profile?.role === 'guard' ? '/guarda' : '/login');
-        return;
-      }
-
       if (!profile || !profile.units) {
         setMiUnidad(null);
         return;
@@ -330,7 +324,7 @@ export default function ResidentePage() {
           .order('check_in_at', { ascending: false })
           .limit(5),
 
-        supabase.from('areas_comunes').select('*'),
+        supabase.from('areas_comunes').select('*').eq('tenant_id', tenantId).eq('is_active', true),
 
         supabase
           .from('reservas')
@@ -450,31 +444,6 @@ export default function ResidentePage() {
       document.removeEventListener('visibilitychange', actualizarAlVolver);
     };
   }, [cargarDatos]);
-
-  const consultarNotificaciones = useCallback(async () => {
-    if (!miTenantId || !miUnidad?.id) return;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('resident_notifications')
-        .select('id, item_id, notification_type, title, message, read_at, created_at')
-        .eq('tenant_id', miTenantId).eq('unit_id', miUnidad.id).eq('user_id', user.id)
-        .order('created_at', { ascending: false }).limit(30);
-      if (error) { console.error('Error actualizando notificaciones:', error); return; }
-      setNotificaciones(data || []);
-    } catch (error) {
-      console.error('Error consultando notificaciones:', error);
-    }
-  }, [miTenantId, miUnidad?.id]);
-
-  useEffect(() => {
-    if (!miTenantId || !miUnidad?.id) return;
-    const intervalo = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void consultarNotificaciones();
-    }, 30000);
-    return () => window.clearInterval(intervalo);
-  }, [miTenantId, miUnidad?.id, consultarNotificaciones]);
 
   // Marcar una notificación como leída
   async function marcarComoLeida(id: string) {
@@ -666,72 +635,11 @@ export default function ResidentePage() {
     (item) => item.status === 'delivered'
   );
 
-  const notificacionesCorrespondencia = notificaciones.filter(
-    (n) => n.notification_type === 'correspondence'
-  );
-  const notificacionesNoLeidasCorrespondencia = notificacionesCorrespondencia.filter(
-    (n) => !n.read_at
-  ).length;
-  const notificacionesLeidasCorrespondencia = notificacionesCorrespondencia.filter(
-    (n) => Boolean(n.read_at)
-  );
-  const notificacionesVisibles = mostrarNotificacionesLeidas
-    ? notificacionesCorrespondencia
-    : notificacionesCorrespondencia.filter((n) => !n.read_at);
   const notificacionesNoLeidas = notificaciones.filter((n) => !n.read_at).length;
-
-  const tipoNotificacionPorTab: Record<string, string> = {
-    paquetes: 'package', correspondencia: 'correspondence', parqueadero: 'parking',
-    visitas: 'visit', reservas: 'reservation', pqrs: 'pqrs', muro: 'announcement',
-  };
-  const etiquetaNotificacion: Record<string, string> = {
-    package: 'Paquetería', correspondence: 'Correspondencia', parking: 'Parqueadero',
-    visit: 'Visitas', reservation: 'Reservas', pqrs: 'PQRS', announcement: 'Comunicados',
-  };
-  const tabPorNotificacion: Record<string, typeof tab> = {
-    package: 'paquetes', correspondence: 'correspondencia', parking: 'parqueadero',
-    visit: 'visitas', reservation: 'reservas', pqrs: 'pqrs', announcement: 'muro',
-  };
-  const contarNotificacionesNoLeidas = (tipo: string) =>
-    notificaciones.filter((n) => n.notification_type === tipo && !n.read_at).length;
-
-  function renderNotificacionesModulo(tabActual: typeof tab) {
-    const tipo = tipoNotificacionPorTab[tabActual];
-    if (!tipo) return null;
-    const items = notificaciones.filter((n) => n.notification_type === tipo).slice(0, 8);
-    const pendientes = items.filter((n) => !n.read_at).length;
-
-    return (
-      <section className="mb-5 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-slate-800">Notificaciones de {etiquetaNotificacion[tipo]}</h3>
-          {pendientes > 0 && <span className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white">{pendientes} nuevas</span>}
-        </div>
-        {items.length === 0 ? (
-          <p className="text-xs text-slate-500">No tienes novedades en este módulo por el momento.</p>
-        ) : (
-          <div className="space-y-2">
-            {items.map((n) => (
-              <article key={n.id} className={`rounded-lg border p-3 ${n.read_at ? 'border-slate-200 bg-white' : 'border-blue-200 bg-white'}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{n.title || `Novedad de ${etiquetaNotificacion[tipo]}`}</p>
-                    <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{n.message}</p>
-                    <p className="mt-2 text-[10px] text-slate-400">{formatDateTime(n.created_at)}</p>
-                  </div>
-                  {!n.read_at ? (
-                    <button type="button" onClick={() => void marcarComoLeida(n.id)} disabled={marcandoNotificacion === n.id} className="shrink-0 text-[11px] font-semibold text-blue-700 hover:underline disabled:opacity-50">
-                      {marcandoNotificacion === n.id ? 'Guardando...' : 'Marcar leída'}
-                    </button>
-                  ) : <span className="shrink-0 text-[10px] font-medium text-emerald-700">Leída</span>}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-    );
-  }
+  const notificacionesLeidas = notificaciones.filter((n) => Boolean(n.read_at));
+  const notificacionesVisibles = mostrarNotificacionesLeidas
+    ? notificaciones
+    : notificaciones.filter((n) => !n.read_at);
 
   async function responderCargoParqueadero(sessionId: string, aprobado: boolean) {
     setRespondiendoCargo(sessionId);
@@ -770,7 +678,7 @@ export default function ResidentePage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center h-fit mt-20">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Unidad no encontrada</h1>
           <p className="text-slate-600 mb-6">
-            No tienes una unidad asignada. Contacta a la administración.
+            No tienes una casa asignada. Contacta a la administración.
           </p>
           <button
             onClick={() => router.push('/login')}
@@ -812,7 +720,7 @@ export default function ResidentePage() {
                 <p className="text-sm text-blue-200">Hola,</p>
                 <h1 className="text-lg font-bold">{nombreResidente.split(' ')[0]}</h1>
                 <p className="text-xs text-blue-200">
-                  {esSantaColoma ? `Torre ${miUnidad.towers.name} · Apto ${miUnidad.code}` : `${miUnidad.towers.tenants.name} - Casa ${getHouseNumber(miUnidad.code)}`}
+                  {miUnidad.towers.tenants.name} - Casa {getHouseNumber(miUnidad.code)}
                 </p>
               </div>
             </div>
@@ -845,8 +753,6 @@ export default function ResidentePage() {
             </button>
           )}
 
-          {tab !== 'inicio' && tab !== 'correspondencia' && renderNotificacionesModulo(tab)}
-
           {/* INICIO - PANEL PRINCIPAL DEL RESIDENTE */}
           {tab === 'inicio' && (
             <section className="space-y-5">
@@ -862,33 +768,6 @@ export default function ResidentePage() {
                 </p>
               </div>
 
-              {notificacionesNoLeidas > 0 && (
-                <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-800">Notificaciones recientes</h3>
-                    <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">{notificacionesNoLeidas} nuevas</span>
-                  </div>
-                  <div className="space-y-2">
-                    {notificaciones.filter((n) => !n.read_at).slice(0, 5).map((n) => (
-                      <article key={n.id} className="rounded-lg border border-blue-100 bg-white p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-blue-700">{etiquetaNotificacion[n.notification_type] || 'Novedad'}</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-800">{n.title}</p>
-                            <p className="mt-1 text-xs text-slate-600">{n.message}</p>
-                            <p className="mt-2 text-[10px] text-slate-400">{formatDateTime(n.created_at)}</p>
-                          </div>
-                          <div className="flex shrink-0 flex-col gap-2 text-right">
-                            <button type="button" onClick={() => setTab(tabPorNotificacion[n.notification_type] || 'inicio')} className="text-[11px] font-semibold text-blue-700 hover:underline">Abrir</button>
-                            <button type="button" onClick={() => void marcarComoLeida(n.id)} disabled={marcandoNotificacion === n.id} className="text-[11px] font-semibold text-slate-500 hover:underline disabled:opacity-50">Marcar leída</button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
-
               <div className="grid grid-cols-2 gap-3">
                 {[
                   {
@@ -896,7 +775,7 @@ export default function ResidentePage() {
                     icon: 'package',
                     titulo: 'Paquetes',
                     descripcion: 'Paquetes recibidos',
-                    badge: contarNotificacionesNoLeidas('package') || paquetes.length,
+                    badge: paquetes.length,
                     color: 'bg-blue-50 text-blue-800',
                   },
                   {
@@ -904,7 +783,7 @@ export default function ResidentePage() {
                     icon: 'mail',
                     titulo: 'Correspondencia',
                     descripcion: 'Documentos recibidos',
-                    badge: contarNotificacionesNoLeidas('correspondence') || documentosPendientes.length,
+                    badge: documentosPendientes.length,
                     color: 'bg-amber-50 text-amber-800',
                   },
                   {
@@ -912,7 +791,7 @@ export default function ResidentePage() {
                     icon: 'car',
                     titulo: 'Parqueadero',
                     descripcion: 'Cargos y autorizaciones',
-                    badge: contarNotificacionesNoLeidas('parking') || cargosParqueadero.filter(
+                    badge: cargosParqueadero.filter(
                       (cargo) => cargo.charge_authorization_status === 'pending'
                     ).length,
                     color: 'bg-emerald-50 text-emerald-800',
@@ -922,7 +801,7 @@ export default function ResidentePage() {
                     icon: 'users',
                     titulo: 'Visitas',
                     descripcion: 'Registro y seguimiento',
-                    badge: contarNotificacionesNoLeidas('visit') || misVisitas.length,
+                    badge: misVisitas.length,
                     color: 'bg-violet-50 text-violet-800',
                   },
                   {
@@ -930,7 +809,7 @@ export default function ResidentePage() {
                     icon: 'calendar',
                     titulo: 'Reservas',
                     descripcion: 'Áreas comunes',
-                    badge: contarNotificacionesNoLeidas('reservation') || misReservas.filter((r) => r.status === 'pending').length,
+                    badge: misReservas.filter((r) => r.status === 'pending').length,
                     color: 'bg-cyan-50 text-cyan-800',
                   },
                   {
@@ -938,7 +817,7 @@ export default function ResidentePage() {
                     icon: 'clipboard',
                     titulo: 'PQRS',
                     descripcion: 'Solicitudes y seguimiento',
-                    badge: contarNotificacionesNoLeidas('pqrs') || misPqrs.filter(
+                    badge: misPqrs.filter(
                       (p) => p.status === 'pending' || p.status === 'in_progress'
                     ).length,
                     color: 'bg-orange-50 text-orange-800',
@@ -948,7 +827,7 @@ export default function ResidentePage() {
                     icon: 'megaphone',
                     titulo: 'Comunicados',
                     descripcion: 'Novedades del conjunto',
-                    badge: contarNotificacionesNoLeidas('announcement'),
+                    badge: 0,
                     color: 'bg-indigo-50 text-indigo-800',
                   },
                 ].map((item) => (
@@ -1111,7 +990,7 @@ export default function ResidentePage() {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Mi correspondencia</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  {`Consulta los documentos físicos recibidos por la portería para ${esSantaColoma ? 'tu apartamento.' : 'tu casa.'}`}
+                  Consulta los documentos físicos recibidos por la portería para tu casa.
                 </p>
               </div>
 
@@ -1119,16 +998,16 @@ export default function ResidentePage() {
                               <section>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="font-bold text-slate-800">Notificaciones</h3>
-                    {notificacionesNoLeidasCorrespondencia > 0 && (
+                    {notificacionesNoLeidas > 0 && (
                       <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded-full">
-                        {notificacionesNoLeidasCorrespondencia} sin leer
+                        {notificacionesNoLeidas} sin leer
                       </span>
                     )}
                   </div>
 
                   {notificacionesVisibles.length === 0 ? (
                     <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-500">
-                      {notificacionesCorrespondencia.length === 0
+                      {notificaciones.length === 0
                         ? 'No tienes notificaciones por el momento.'
                         : 'No tienes notificaciones pendientes de lectura.'}
                     </div>
@@ -1177,7 +1056,7 @@ export default function ResidentePage() {
                     </div>
                   )}
 
-                  {notificacionesLeidasCorrespondencia.length > 0 && (
+                  {notificacionesLeidas.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setMostrarNotificacionesLeidas((actual) => !actual)}
@@ -1185,7 +1064,7 @@ export default function ResidentePage() {
                     >
                       {mostrarNotificacionesLeidas
                         ? 'Ocultar notificaciones leídas'
-                        : `Ver notificaciones leídas (${notificacionesLeidasCorrespondencia.length})`}
+                        : `Ver notificaciones leídas (${notificacionesLeidas.length})`}
                     </button>
                   )}
                 </section>
@@ -1502,7 +1381,7 @@ export default function ResidentePage() {
                   Cargos de parqueadero
                 </h2>
                 <p className="text-sm text-slate-500">
-                  {`Consulta las autorizaciones y el estado de los pagos asociados a ${esSantaColoma ? 'tu apartamento.' : 'tu casa.'}`}
+                  Consulta las autorizaciones y el estado de los pagos asociados a tu casa.
                 </p>
               </div>
 
@@ -1678,7 +1557,13 @@ export default function ResidentePage() {
                       </option>
                     ))}
                   </select>
-                </label>
+                </label>                {areas.find((area) => area.id === reservaForm.areaId)?.name?.toLowerCase().includes('salón social') && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-semibold">Información sobre el costo de la reserva</p>
+                    <p className="mt-1">La reserva del Salón Social puede tener un costo. La tarifa, los medios de pago y las condiciones deben consultarse directamente con la administración del conjunto.</p>
+                    <p className="mt-1">La solicitud no implica que el pago haya sido realizado ni que la reserva esté aprobada.</p>
+                  </div>
+                )}
 
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Fecha</span>
@@ -1752,17 +1637,20 @@ export default function ResidentePage() {
                               ? 'bg-amber-100 text-amber-800'
                               : r.status === 'approved'
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
+                                : r.status === 'cancelled'
+                                  ? 'bg-slate-100 text-slate-700'
+                                  : 'bg-red-100 text-red-800'
                           }`}
                         >
                           {r.status === 'pending'
                             ? 'Pendiente'
                             : r.status === 'approved'
                               ? 'Aprobada'
-                              : 'Rechazada'}
+                              : r.status === 'cancelled'
+                                ? 'Cancelada'
+                                : 'Rechazada'}
                         </span>
                       </div>
-
                       {r.admin_notes && (
                         <div className="mt-2 bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700">
                           <strong>Motivo:</strong> {r.admin_notes}

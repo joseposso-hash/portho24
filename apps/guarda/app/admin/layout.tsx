@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -47,7 +47,7 @@ const menuGroups = [
   {
     title: 'Operación de portería',
     items: [
-      { label: 'Paquetería', href: '/admin/paquetes', icon: 'package' as const },
+      { label: 'Paquetes', href: '/admin/paquetes', icon: 'package' as const },
       { label: 'Correspondencia', href: '/admin/correspondencia', icon: 'mail' as const },
       { label: 'Visitas', href: '/admin/visitas', icon: 'users' as const },
       { label: 'Vehículos', href: '/admin/vehiculos', icon: 'car' as const },
@@ -57,8 +57,8 @@ const menuGroups = [
   {
     title: 'Comunidad y convivencia',
     items: [
-            { label: 'Directorio', href: '/admin/directorio', icon: 'users' as const },
-      { label: 'Gestión de hogares', href: '/admin/residentes', icon: 'home' as const },
+      { label: 'Directorio', href: '/admin/directorio', icon: 'users' as const },
+      { label: 'Hogares', href: '/admin/residentes', icon: 'users' as const },
       { label: 'Reservas', href: '/admin/reservas', icon: 'calendar' as const },
       { label: 'PQRS', href: '/admin/pqrs', icon: 'clipboard' as const },
       { label: 'Comunicados', href: '/admin/comunicados', icon: 'megaphone' as const },
@@ -83,53 +83,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function cargarPerfil() {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (!user) {
-        router.replace('/login');
-        return;
-      }
-
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from('users')
-        .select('full_name, role, is_active, tenant_id')
+        .select('full_name, tenant_id, tenants(name)')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error || !profile) {
-        console.error('No se pudo cargar el perfil administrativo:', error);
-        return;
-      }
-
-      if (profile.role !== 'admin' || profile.is_active === false) {
-        router.replace(
-          profile.role === 'resident'
-            ? '/residente'
-            : profile.role === 'guard'
-              ? '/guarda'
-              : '/login'
-        );
-        return;
-      }
-
-      setNombreAdmin(profile.full_name || 'Administrador');
-
-      if (profile.tenant_id) {
-        const { data: tenant, error: tenantError } = await supabase
-          .from('tenants')
-          .select('name')
-          .eq('id', profile.tenant_id)
-          .maybeSingle();
-
-        if (tenantError) {
-          console.error('No se pudo cargar el conjunto:', tenantError);
-        }
-
-        setNombreConjunto(tenant?.name || 'Mi Conjunto');
+      if (profile) {
+        setNombreAdmin(profile.full_name || 'Administrador');
+        const tenantData = Array.isArray(profile.tenants) ? profile.tenants[0] : profile.tenants;
+        if (tenantData?.name) setNombreConjunto('Pinar de la Fontana E3');
       }
     }
-
     cargarPerfil();
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (window.innerWidth > 768) setIsOpen(true);
@@ -262,5 +231,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
-
-

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -19,21 +20,38 @@ export default function VisitasPage() {
   const [loadingUnits, setLoadingUnits] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const [units, setUnits] = useState<any[]>([]);
+  const [selectedTowerId, setSelectedTowerId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
-  const [selectedTowerId, setSelectedTowerId] = useState('');
-  const towers = Array.from(new Map(units.map((unit: any) => [unit.tower_id, { id: unit.tower_id, name: unit.towerName }])).values());
-  const apartments = units.filter((unit: any) => unit.tower_id === selectedTowerId);
+
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
+
+  const towers = Array.from(
+    new Map(
+      units.map((unit) => [
+        unit.tower_id,
+        { id: unit.tower_id, name: unit.towerName }
+      ])
+    ).values()
+  );
+
+  const apartments = units.filter(
+    (unit) => unit.tower_id === selectedTowerId
+  );
 
   useEffect(() => {
     async function init() {
       setLoadingUnits(true);
 
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: authError
+        } = await supabase.auth.getUser();
+
         if (authError) throw authError;
         if (!user) throw new Error('No hay una sesión autenticada.');
 
@@ -44,6 +62,7 @@ export default function VisitasPage() {
           .maybeSingle();
 
         if (profileError) throw profileError;
+
         if (!profile?.tenant_id || profile.is_active === false) {
           throw new Error('El usuario no tiene un conjunto activo asignado.');
         }
@@ -66,7 +85,7 @@ export default function VisitasPage() {
 
         setHousingModel(model);
 
-        const { data: towers, error: towersError } = await supabase
+        const { data: towerData, error: towersError } = await supabase
           .from('towers')
           .select('id, name')
           .eq('tenant_id', currentTenantId)
@@ -74,12 +93,12 @@ export default function VisitasPage() {
 
         if (towersError) throw towersError;
 
-        const towerIds = (towers || []).map((tower: any) => tower.id);
+        const towerIds = (towerData || []).map((tower: any) => tower.id);
         const towerNames = new Map(
-          (towers || []).map((tower: any) => [tower.id, tower.name])
+          (towerData || []).map((tower: any) => [tower.id, tower.name])
         );
 
-        if (towerIds.length === 0) {
+        if (!towerIds.length) {
           setUnits([]);
           return;
         }
@@ -92,12 +111,16 @@ export default function VisitasPage() {
 
         if (unitsError) throw unitsError;
 
-        setUnits(
-          (unitData || []).map((unit: any) => ({
-            ...unit,
-            towerName: towerNames.get(unit.tower_id) || ''
-          }))
-        );
+        const loadedUnits = (unitData || []).map((unit: any) => ({
+          ...unit,
+          towerName: towerNames.get(unit.tower_id) || ''
+        }));
+
+        setUnits(loadedUnits);
+
+        if (model !== 'houses' && towerIds.length) {
+          setSelectedTowerId(towerIds[0]);
+        }
       } catch (error: any) {
         setErrorMsg(error.message || 'No fue posible cargar las viviendas.');
       } finally {
@@ -105,7 +128,7 @@ export default function VisitasPage() {
       }
     }
 
-    init();
+    void init();
   }, []);
 
   function seleccionarUnidad(value: string) {
@@ -124,7 +147,26 @@ export default function VisitasPage() {
     });
 
     setUnitId(found?.id || '');
-    if (found) setSelectedTowerId(found.tower_id);
+
+    if (found?.tower_id) {
+      setSelectedTowerId(found.tower_id);
+    }
+  }
+
+  function seleccionarTorre(towerId: string) {
+    setSelectedTowerId(towerId);
+    setUnitId('');
+    setUnitSearch('');
+  }
+
+  function seleccionarApartamento(id: string) {
+    const selected = units.find((unit) => unit.id === id);
+    setUnitId(id);
+    setUnitSearch(
+      selected
+        ? formatUnitLabel(selected.code, selected.towerName, housingModel)
+        : ''
+    );
   }
 
   async function registrarVisita(e: React.FormEvent) {
@@ -139,7 +181,10 @@ export default function VisitasPage() {
     setErrorMsg(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
       if (!user) throw new Error('La sesión ha expirado.');
 
       const { data: visitor, error: visitorError } = await supabase
@@ -178,7 +223,7 @@ export default function VisitasPage() {
 
       if (vieneEnVehiculo) {
         router.push(
-          `/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${encodeURIComponent(documento)}&casa=${encodeURIComponent(unitSearch)}&unit_id=${encodeURIComponent(unitId)}`
+          `/parking?visit_id=${visita.id}&unit_id=${unitId}&nombre=${encodeURIComponent(nombre)}&doc=${encodeURIComponent(documento)}`
         );
       } else {
         setSuccess(true);
@@ -190,16 +235,14 @@ export default function VisitasPage() {
     }
   }
 
-  const housingLabel = housingModel === 'houses'
-    ? 'Casa'
-    : housingModel === 'apartments'
-      ? 'Torre / Apartamento'
-      : 'Vivienda';
+  const isHouseModel = housingModel === 'houses';
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 flex flex-col items-center">
       <header className="w-full max-w-lg mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Visita No Anunciada</h1>
+        <h1 className="text-2xl font-bold text-slate-900">
+          Visita No Anunciada
+        </h1>
         <button
           onClick={() => router.push('/')}
           className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 shadow hover:bg-slate-50"
@@ -218,7 +261,9 @@ export default function VisitasPage() {
             )}
 
             <label className="block">
-              <span className="text-sm font-medium text-slate-700">Nombre del visitante</span>
+              <span className="text-sm font-medium text-slate-700">
+                Nombre del visitante
+              </span>
               <input
                 type="text"
                 value={nombre}
@@ -229,7 +274,9 @@ export default function VisitasPage() {
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-slate-700">Documento de identidad</span>
+              <span className="text-sm font-medium text-slate-700">
+                Documento de identidad
+              </span>
               <input
                 type="text"
                 value={documento}
@@ -240,45 +287,114 @@ export default function VisitasPage() {
             </label>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-              <p className="text-sm font-bold text-slate-800">Destino de la visita</p>
-              {housingModel === 'apartments' ? (
+              <p className="text-sm font-bold text-slate-800">
+                Destino de la visita
+              </p>
+
+              {isHouseModel ? (
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">
+                    Casa
+                  </span>
+                  <input
+                    type="text"
+                    list="housing-options"
+                    value={unitSearch}
+                    onChange={(e) => seleccionarUnidad(e.target.value)}
+                    placeholder={
+                      loadingUnits
+                        ? 'Cargando casas...'
+                        : 'Escribe el número de casa'
+                    }
+                    disabled={loadingUnits}
+                    className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 disabled:bg-slate-100"
+                    required
+                  />
+                  <datalist id="housing-options">
+                    {units.map((unit) => (
+                      <option
+                        key={unit.id}
+                        value={formatUnitLabel(
+                          unit.code,
+                          unit.towerName,
+                          housingModel
+                        )}
+                      />
+                    ))}
+                  </datalist>
+                </label>
+              ) : (
                 <>
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Torre</span>
-                    <select value={selectedTowerId} onChange={(e) => { setSelectedTowerId(e.target.value); setUnitId(''); setUnitSearch(''); }} disabled={loadingUnits} required className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
+                    <span className="text-xs font-medium text-slate-600">
+                      Torre
+                    </span>
+                    <select
+                      value={selectedTowerId}
+                      onChange={(e) => seleccionarTorre(e.target.value)}
+                      disabled={loadingUnits || towers.length === 0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-900 disabled:bg-slate-100"
+                      required
+                    >
                       <option value="">Selecciona una torre</option>
-                      {towers.map((tower: any) => <option key={tower.id} value={tower.id}>{tower.name}</option>)}
+                      {towers.map((tower: any) => (
+                        <option key={tower.id} value={tower.id}>
+                          {tower.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
+
                   <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Apartamento</span>
-                    <select value={unitId} onChange={(e) => { const unit = apartments.find((item: any) => item.id === e.target.value); setUnitId(e.target.value); setUnitSearch(unit ? formatUnitLabel(unit.code, unit.towerName, housingModel) : ''); }} disabled={loadingUnits || !selectedTowerId} required className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
+                    <span className="text-xs font-medium text-slate-600">
+                      Apartamento
+                    </span>
+                    <select
+                      value={unitId}
+                      onChange={(e) => seleccionarApartamento(e.target.value)}
+                      disabled={
+                        loadingUnits ||
+                        !selectedTowerId ||
+                        apartments.length === 0
+                      }
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-900 disabled:bg-slate-100"
+                      required
+                    >
                       <option value="">Selecciona un apartamento</option>
-                      {apartments.map((unit: any) => <option key={unit.id} value={unit.id}>{unit.code}</option>)}
+                      {apartments.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.code}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </>
-              ) : (
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">{housingLabel}</span>
-                  <input type="text" list="housing-options" value={unitSearch} onChange={(e) => seleccionarUnidad(e.target.value)} placeholder={loadingUnits ? 'Cargando viviendas...' : 'Escribe el número de casa'} disabled={loadingUnits} className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 disabled:bg-slate-100" required />
-                  <datalist id="housing-options">{units.map((unit) => <option key={unit.id} value={formatUnitLabel(unit.code, unit.towerName, housingModel)} />)}</datalist>
-                  {unitSearch && !unitId && <span className="mt-1 block text-xs text-amber-700">Selecciona una vivienda válida de la lista.</span>}
-                </label>
+              )}
+
+              {unitSearch && !unitId && isHouseModel && (
+                <span className="block text-xs text-amber-700">
+                  Selecciona una casa válida de la lista.
+                </span>
               )}
             </div>
 
             <div>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Foto del visitante</span>
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Foto del visitante
+              </span>
               <label className="flex h-16 w-full cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 transition hover:border-[#1E3A5F]">
                 <span className="text-xs font-medium text-slate-600">
-                  {fotoVisitante ? 'Foto capturada' : 'Tomar foto del visitante'}
+                  {fotoVisitante
+                    ? 'Foto capturada'
+                    : 'Tomar foto del visitante'}
                 </span>
                 <input
                   type="file"
                   accept="image/*"
                   capture="user"
-                  onChange={(e) => setFotoVisitante(e.target.files?.[0] || null)}
+                  onChange={(e) =>
+                    setFotoVisitante(e.target.files?.[0] || null)
+                  }
                   className="hidden"
                 />
               </label>
@@ -306,7 +422,9 @@ export default function VisitasPage() {
               disabled={loading || loadingUnits || !unitId}
               className="mt-2 w-full rounded-xl bg-[#1E3A5F] py-3 font-semibold text-white transition hover:bg-[#152945] disabled:opacity-50"
             >
-              {loading ? 'Registrando ingreso...' : 'Dar ingreso al visitante'}
+              {loading
+                ? 'Registrando ingreso...'
+                : 'Dar ingreso al visitante'}
             </button>
           </form>
         ) : (
@@ -314,7 +432,9 @@ export default function VisitasPage() {
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">
               ✓
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">Ingreso registrado</h2>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Ingreso registrado
+            </h2>
             <button
               onClick={() => {
                 setSuccess(false);

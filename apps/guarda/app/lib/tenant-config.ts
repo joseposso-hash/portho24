@@ -1,76 +1,81 @@
 ﻿export type HousingModel = 'houses' | 'apartments' | 'units';
 
-const PINAR_TENANT_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
-const SANTA_COLOMA_TENANT_ID = '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7';
-
-export function resolveHousingModel(
-  tenantId?: string | null,
-  configuredModel?: string | null
-): HousingModel {
-  if (tenantId === PINAR_TENANT_ID) return 'houses';
-  if (tenantId === SANTA_COLOMA_TENANT_ID) return 'apartments';
-  if (configuredModel === 'houses' || configuredModel === 'apartments' || configuredModel === 'units') {
-    return configuredModel;
-  }
-  return 'units';
-}
-
-export function formatTowerLabel(towerName?: string | null): string {
-  const name = String(towerName ?? '').trim();
-  if (!name) return '';
-  if (/^torre\b/i.test(name)) return name;
-  return /^\d+$/.test(name) ? `Torre ${name}` : name;
-}
-
 export type HousingConfig = {
   model: HousingModel;
   singular: string;
   plural: string;
   article: string;
+  searchLabel: string;
+  searchPlaceholder: string;
 };
 
-export function getHousingConfig(model?: string | null): HousingConfig {
-  if (model === 'houses') {
-    return {
-      model: 'houses',
-      singular: 'Casa',
-      plural: 'Casas',
-      article: 'casa',
-    };
-  }
+export const TENANT_HOUSING_MODELS: Record<string, HousingModel> = {
+  '4888dce4-b74a-491f-b7d6-f2d903f2fe30': 'houses',
+  '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7': 'apartments',
+};
 
-  if (model === 'apartments') {
-    return {
-      model: 'apartments',
-      singular: 'Apartamento',
-      plural: 'Apartamentos',
-      article: 'apartamento',
-    };
-  }
-
-  return {
+const HOUSING_CONFIGS: Record<HousingModel, HousingConfig> = {
+  houses: {
+    model: 'houses',
+    singular: 'Casa',
+    plural: 'Casas',
+    article: 'la',
+    searchLabel: 'Número de casa',
+    searchPlaceholder: 'Ej. 24',
+  },
+  apartments: {
+    model: 'apartments',
+    singular: 'Apartamento',
+    plural: 'Apartamentos',
+    article: 'el',
+    searchLabel: 'Número de apartamento',
+    searchPlaceholder: 'Ej. 204',
+  },
+  units: {
     model: 'units',
-    singular: 'Vivienda',
-    plural: 'Viviendas',
-    article: 'vivienda',
-  };
+    singular: 'Unidad',
+    plural: 'Unidades',
+    article: 'la',
+    searchLabel: 'Número de unidad',
+    searchPlaceholder: 'Ej. 24',
+  },
+};
+
+export function getHousingConfig(value?: string | null): HousingConfig {
+  if (value === 'houses' || value === 'apartments' || value === 'units') {
+    return HOUSING_CONFIGS[value];
+  }
+
+  const model = value ? TENANT_HOUSING_MODELS[value] : undefined;
+  return HOUSING_CONFIGS[model ?? 'units'];
+}
+
+function cleanUnitCode(code: string): string {
+  return code
+    .trim()
+    .replace(/^(casa|apartamento|apto|unidad)\s*/i, '')
+    .trim();
 }
 
 export function formatUnitLabel(
-  code?: string | null,
-  towerName?: string | null,
-  model?: string | null
+  code: string,
+  tower?: string | null,
+  housingModel?: string | null
 ): string {
-  const config = getHousingConfig(model);
-  const unitCode = String(code ?? '').trim();
+  const config = getHousingConfig(housingModel);
+  const cleanCode = cleanUnitCode(code);
 
-  if (!unitCode) return config.singular;
-
-  const unitLabel = `${config.singular} ${unitCode}`;
-
-  if (config.model === 'houses' || !towerName) {
-    return unitLabel;
+  if (config.model === 'apartments') {
+    return tower
+      ? `Torre ${tower} · Apartamento ${cleanCode}`
+      : `Apartamento ${cleanCode}`;
   }
 
-  return `${formatTowerLabel(towerName)} · ${unitLabel}`;
+  if (config.model === 'houses') {
+    return `Casa ${cleanCode}`;
+  }
+
+  return tower
+    ? `Torre ${tower} · Unidad ${cleanCode}`
+    : `Unidad ${cleanCode}`;
 }

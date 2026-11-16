@@ -1,7 +1,8 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../../lib/supabase-admin';
-import { resolveHousingModel } from '../../../lib/tenant-config';
+import { getHousingConfig } from '../../../lib/tenant-config';
 
 type ResultadoAutorizacion =
   | { error: string; status: 401 | 403 | 500 }
@@ -15,30 +16,46 @@ type ResultadoAutorizacion =
       };
     };
 
-async function autorizar(request: NextRequest): Promise<ResultadoAutorizacion> {
+async function autorizar(
+  request: NextRequest
+): Promise<ResultadoAutorizacion> {
   const authorization = request.headers.get('authorization');
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice(7)
     : null;
 
-  if (!token) return { error: 'Sesi├│n no v├ílida.', status: 401 };
+  if (!token) {
+    return { error: 'Sesión no válida.', status: 401 };
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    return { error: 'Configuraci├│n de Supabase incompleta.', status: 500 };
+    return {
+      error: 'Configuración de Supabase incompleta.',
+      status: 500,
+    };
   }
 
   const client = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: { Authorization: `Bearer ${token}` },
+    },
   });
 
-  const { data: auth, error: authError } = await client.auth.getUser(token);
+  const { data: auth, error: authError } =
+    await client.auth.getUser(token);
 
   if (authError || !auth.user) {
-    return { error: 'Sesi├│n no v├ílida o vencida.', status: 401 };
+    return {
+      error: 'Sesión no válida o vencida.',
+      status: 401,
+    };
   }
 
   const { data: profile, error } = await client
@@ -54,7 +71,10 @@ async function autorizar(request: NextRequest): Promise<ResultadoAutorizacion> {
     profile.is_active !== true ||
     !profile.tenant_id
   ) {
-    return { error: 'No tienes permisos de administrador.', status: 403 };
+    return {
+      error: 'No tienes permisos de administrador.',
+      status: 403,
+    };
   }
 
   return { user: auth.user, profile };
@@ -64,7 +84,33 @@ function respuestaError(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
 }
 
-async function validarCasa(unitId: string, tenantId: string) {
+async function obtenerConfiguracionVivienda(tenantId: string) {
+  const { data: tenant, error } = await supabaseAdmin
+    .from('tenants')
+    .select('housing_model')
+    .eq('id', tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return getHousingConfig(tenant?.housing_model ?? tenantId);
+}
+
+function articuloVivienda(config: ReturnType<typeof getHousingConfig>) {
+  return config.model === 'apartments' ? 'el' : 'la';
+}
+
+function mensajeVivienda(
+  config: ReturnType<typeof getHousingConfig>,
+  complemento: string
+) {
+  const articulo = articuloVivienda(config);
+  const nombre = config.singular.toLowerCase();
+
+  return `${articulo.charAt(0).toUpperCase()}${articulo.slice(1)} ${nombre} ${complemento}`;
+}
+
+async function validarUnidad(unitId: string, tenantId: string) {
   if (!unitId) return false;
 
   const { data: unit, error: unitError } = await supabaseAdmin
@@ -85,28 +131,39 @@ async function validarCasa(unitId: string, tenantId: string) {
   return !towerError && !!tower;
 }
 
-function validarDatosPersonales(nombre: string, email: string, phone: string) {
+function validarDatosPersonales(
+  nombre: string,
+  email: string,
+  phone: string
+) {
   if (!nombre || nombre.length > 120) {
-    return 'Ingresa un nombre v├ílido (m├íximo 120 caracteres).';
+    return 'Ingresa un nombre válido (máximo 120 caracteres).';
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-    return 'Ingresa un correo electr├│nico v├ílido.';
+    return 'Ingresa un correo electrónico válido.';
   }
 
   if (phone.length > 30) {
-    return 'El tel├®fono no puede superar 30 caracteres.';
+    return 'El teléfono no puede superar 30 caracteres.';
   }
 
   return null;
 }
 
-async function limpiarInvitacionIncompleta(userId: string, etapa: string) {
+async function limpiarInvitacionIncompleta(
+  userId: string,
+  etapa: string
+) {
   try {
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (error) {
-      console.error(`No se pudo anular la invitación (${etapa}):`, error);
+      console.error(
+        `No se pudo anular la invitación (${etapa}):`,
+        error
+      );
+
       return { deleted: false, error: error.message };
     }
 
@@ -115,18 +172,25 @@ async function limpiarInvitacionIncompleta(userId: string, etapa: string) {
     const message =
       error instanceof Error ? error.message : 'Error desconocido';
 
-    console.error(`Error compensando invitación (${etapa}):`, error);
+    console.error(
+      `Error compensando invitación (${etapa}):`,
+      error
+    );
+
     return { deleted: false, error: message };
   }
 }
+
 export async function GET(request: NextRequest) {
   try {
     const access = await autorizar(request);
+
     if ('error' in access) {
       return respuestaError(access.error, access.status);
     }
 
     const tenantId = access.profile.tenant_id;
+
     const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
       .select('housing_model')
@@ -134,18 +198,33 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (tenantError) throw tenantError;
-    const housingModel = resolveHousingModel(tenantId, tenant?.housing_model);
 
     const { data: towers, error: towersError } = await supabaseAdmin
       .from('towers')
-      .select('id, name')
+      .select('id, tower')
       .eq('tenant_id', tenantId);
 
     if (towersError) throw towersError;
 
-    const towerNames = new Map((towers || []).map((tower: { id: string; name: string }) => [tower.id, tower.name]));
-    const towerIds = (towers || []).map((tower: { id: string }) => tower.id);
-    let units: Array<{ id: string; code: string; tower_id: string; tower_name: string }> = [];
+    const towerIds = (towers || []).map(
+      (tower: { id: string }) => tower.id
+    );
+
+    const towerNames = new Map(
+      (towers || []).map(
+        (tower: { id: string; tower: string | null }) => [
+          tower.id,
+          tower.tower,
+        ]
+      )
+    );
+
+    let units: Array<{
+      id: string;
+      code: string;
+      tower_id: string;
+      tower: string | null;
+    }> = [];
 
     if (towerIds.length) {
       const { data, error } = await supabaseAdmin
@@ -154,43 +233,51 @@ export async function GET(request: NextRequest) {
         .in('tower_id', towerIds);
 
       if (error) throw error;
-      units = (data || []).map((unit: { id: string; code: string; tower_id: string }) => ({
-        ...unit,
-        tower_name: towerNames.get(unit.tower_id) || '',
-      }));
+
+      units = (data || []).map(
+  (unit: { id: string; code: string; tower_id: string }) => ({
+    id: unit.id,
+    code: unit.code,
+    tower_id: unit.tower_id,
+    tower: towerNames.get(unit.tower_id) ?? null,
+  })
+);
     }
 
-    const { data: residents, error: residentsError } = await supabaseAdmin
-      .from('users')
-      .select(
-        'id, full_name, email, phone, tenant_id, unit_id, role, household_role, is_active, created_at'
-      )
-      .eq('tenant_id', tenantId)
-      .eq('role', 'resident')
-      .order('full_name');
+    const { data: residents, error: residentsError } =
+      await supabaseAdmin
+        .from('users')
+        .select(
+          'id, full_name, email, phone, tenant_id, unit_id, role, household_role, is_active, created_at'
+        )
+        .eq('tenant_id', tenantId)
+        .eq('role', 'resident')
+        .order('full_name');
 
     if (residentsError) throw residentsError;
 
-    const { data: history, error: historyError } = await supabaseAdmin
-      .from('resident_household_history')
-      .select(
-        'id, user_id, unit_id, household_role, started_at, ended_at, assigned_by, ended_by, end_reason'
-      )
-      .eq('tenant_id', tenantId)
-      .order('started_at', { ascending: false });
+    const { data: history, error: historyError } =
+      await supabaseAdmin
+        .from('resident_household_history')
+        .select(
+          'id, user_id, unit_id, household_role, started_at, ended_at, assigned_by, ended_by, end_reason'
+        )
+        .eq('tenant_id', tenantId)
+        .order('started_at', { ascending: false });
 
     if (historyError) throw historyError;
 
     return NextResponse.json({
-      housingModel,
       residents: residents || [],
       units,
       history: history || [],
+      housingModel: tenant?.housing_model ?? null,
     });
   } catch (error) {
-    console.error('Error GET hogares:', error);
+    console.error('Error GET residentes:', error);
+
     return respuestaError(
-      'No fue posible cargar la informaci├│n de hogares.',
+      'No fue posible cargar la información de residentes.',
       500
     );
   }
@@ -198,11 +285,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   let invitedUserId: string | null = null;
+
   try {
     const access = await autorizar(request);
+
     if ('error' in access) {
       return respuestaError(access.error, access.status);
     }
+
+    const tenantId = access.profile.tenant_id;
+    const housing = await obtenerConfiguracionVivienda(tenantId);
 
     const body = await request.json();
 
@@ -212,21 +304,41 @@ export async function POST(request: NextRequest) {
     const unitId = String(body.unitId ?? '');
     const householdRole = String(body.householdRole ?? '');
 
-    const validationError = validarDatosPersonales(nombre, email, phone);
-    if (validationError) return respuestaError(validationError);
+    const validationError = validarDatosPersonales(
+      nombre,
+      email,
+      phone
+    );
+
+    if (validationError) {
+      return respuestaError(validationError);
+    }
 
     if (!unitId || !['titular', 'integrante'].includes(householdRole)) {
-      return respuestaError('Selecciona una casa y un rol del hogar v├ílido.');
+      return respuestaError(
+        `Selecciona ${articuloVivienda(housing)} ${housing.singular.toLowerCase()} y un rol del hogar válido.`
+      );
     }
 
-    const validUnit = await validarCasa(unitId, access.profile.tenant_id);
+    const validUnit = await validarUnidad(unitId, tenantId);
 
     if (!validUnit) {
-      return respuestaError('La casa no existe o no pertenece a tu conjunto.', 403);
+      return respuestaError(
+        mensajeVivienda(
+          housing,
+          'no existe o no pertenece a tu conjunto.'
+        ),
+        403
+      );
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-    const redirectTo = new URL('/auth/confirm', siteUrl).toString();
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+
+    const redirectTo = new URL(
+      '/auth/confirm',
+      siteUrl
+    ).toString();
 
     const { data: invite, error: inviteError } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -236,7 +348,8 @@ export async function POST(request: NextRequest) {
 
     if (inviteError || !invite.user) {
       return respuestaError(
-        inviteError?.message || 'No fue posible enviar la invitaci├│n.',
+        inviteError?.message ||
+          'No fue posible enviar la invitación.',
         409
       );
     }
@@ -254,9 +367,16 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (profileError) {
-      console.error('Error guardando perfil invitado:', profileError);
+      console.error(
+        'Error guardando perfil invitado:',
+        profileError
+      );
 
-      const cleanup = await limpiarInvitacionIncompleta(userId, 'perfil');
+      const cleanup = await limpiarInvitacionIncompleta(
+        userId,
+        'perfil'
+      );
+
       invitedUserId = null;
 
       if (cleanup.deleted) {
@@ -276,7 +396,7 @@ export async function POST(request: NextRequest) {
       'admin_assign_resident',
       {
         p_user_id: userId,
-        p_tenant_id: access.profile.tenant_id,
+        p_tenant_id: tenantId,
         p_unit_id: unitId,
         p_household_role: householdRole,
         p_actor_id: access.user.id,
@@ -284,9 +404,16 @@ export async function POST(request: NextRequest) {
     );
 
     if (assignError) {
-      console.error('Error asignando nuevo residente:', assignError);
+      console.error(
+        'Error asignando nuevo residente:',
+        assignError
+      );
 
-      const cleanup = await limpiarInvitacionIncompleta(userId, 'asignación');
+      const cleanup = await limpiarInvitacionIncompleta(
+        userId,
+        'asignación'
+      );
+
       invitedUserId = null;
 
       if (cleanup.deleted) {
@@ -306,11 +433,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Invitaci├│n enviada y residente asignado correctamente.',
+      message:
+        'Invitación enviada y residente asignado correctamente.',
       userId,
     });
   } catch (error) {
-    console.error('Error POST hogares:', error);
+    console.error('Error POST residentes:', error);
 
     if (invitedUserId) {
       const cleanup = await limpiarInvitacionIncompleta(
@@ -326,44 +454,56 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return respuestaError('Error interno al crear el residente. Si la invitación fue anulada, puedes intentarlo nuevamente.', 500);
+    return respuestaError(
+      'Error interno al crear el residente. Si la invitación fue anulada, puedes intentarlo nuevamente.',
+      500
+    );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
     const access = await autorizar(request);
+
     if ('error' in access) {
       return respuestaError(access.error, access.status);
     }
 
+    const tenantId = access.profile.tenant_id;
     const body = await request.json();
     const action = String(body.action ?? '');
 
-    // Finalizar la ocupaci├│n completa de una casa.
+    // Finalizar la ocupación completa de una vivienda.
     if (action === 'close_household') {
+      const housing = await obtenerConfiguracionVivienda(tenantId);
+
       const unitId = String(body.unitId ?? '');
       const endReason = String(
         body.endReason ?? 'Cambio de ocupantes'
       ).trim();
 
       if (!unitId || !endReason || endReason.length > 250) {
-        return respuestaError('Selecciona una casa e indica un motivo v├ílido.');
+        return respuestaError(
+          `Selecciona ${articuloVivienda(housing)} ${housing.singular.toLowerCase()} e indica un motivo válido.`
+        );
       }
 
-      const validUnit = await validarCasa(
-        unitId,
-        access.profile.tenant_id
-      );
+      const validUnit = await validarUnidad(unitId, tenantId);
 
       if (!validUnit) {
-        return respuestaError('La casa no pertenece a tu conjunto.', 403);
+        return respuestaError(
+          mensajeVivienda(
+            housing,
+            'no pertenece a tu conjunto.'
+          ),
+          403
+        );
       }
 
       const { data, error } = await supabaseAdmin.rpc(
         'admin_close_household',
         {
-          p_tenant_id: access.profile.tenant_id,
+          p_tenant_id: tenantId,
           p_unit_id: unitId,
           p_actor_id: access.user.id,
           p_end_reason: endReason,
@@ -371,13 +511,13 @@ export async function PATCH(request: NextRequest) {
       );
 
       if (error) {
-        console.error('Error cerrando hogar:', error);
+        console.error('Error cerrando ocupación:', error);
         return respuestaError(error.message, 409);
       }
 
       return NextResponse.json({
         success: true,
-        message: `Ocupaci├│n finalizada. Cuentas desactivadas: ${
+        message: `Ocupación finalizada. Cuentas desactivadas: ${
           data?.deactivated_count ?? 0
         }.`,
         result: data,
@@ -387,23 +527,31 @@ export async function PATCH(request: NextRequest) {
     const userId = String(body.userId ?? '');
 
     if (!userId) {
-      return respuestaError('No se indic├│ el residente.');
+      return respuestaError('No se indicó el residente.');
     }
 
     if (userId === access.user.id) {
-      return respuestaError('No puedes modificar tu propia cuenta.');
+      return respuestaError(
+        'No puedes modificar tu propia cuenta.'
+      );
     }
 
-    const { data: target, error: targetError } = await supabaseAdmin
-      .from('users')
-      .select('id, tenant_id, role, is_active, email, full_name, phone')
-      .eq('id', userId)
-      .eq('tenant_id', access.profile.tenant_id)
-      .eq('role', 'resident')
-      .maybeSingle();
+    const { data: target, error: targetError } =
+      await supabaseAdmin
+        .from('users')
+        .select(
+          'id, tenant_id, role, is_active, email, full_name, phone'
+        )
+        .eq('id', userId)
+        .eq('tenant_id', tenantId)
+        .eq('role', 'resident')
+        .maybeSingle();
 
     if (targetError || !target) {
-      return respuestaError('Residente no encontrado en tu conjunto.', 404);
+      return respuestaError(
+        'Residente no encontrado en tu conjunto.',
+        404
+      );
     }
 
     // Editar los datos de la misma persona.
@@ -412,23 +560,37 @@ export async function PATCH(request: NextRequest) {
       const email = String(body.email ?? '').trim().toLowerCase();
       const phone = String(body.phone ?? '').trim();
 
-      const validationError = validarDatosPersonales(nombre, email, phone);
-      if (validationError) return respuestaError(validationError);
+      const validationError = validarDatosPersonales(
+        nombre,
+        email,
+        phone
+      );
+
+      if (validationError) {
+        return respuestaError(validationError);
+      }
 
       const { data: authData, error: authReadError } =
         await supabaseAdmin.auth.admin.getUserById(userId);
 
       if (authReadError || !authData.user) {
-        return respuestaError('No fue posible verificar la cuenta de acceso.', 409);
+        return respuestaError(
+          'No fue posible verificar la cuenta de acceso.',
+          409
+        );
       }
 
       const oldAuthEmail = authData.user.email;
-      const oldUserMetadata = authData.user.user_metadata ?? {};
+      const oldUserMetadata =
+        authData.user.user_metadata ?? {};
 
       const { error: authUpdateError } =
         await supabaseAdmin.auth.admin.updateUserById(userId, {
           email,
-          user_metadata: { ...oldUserMetadata, full_name: nombre },
+          user_metadata: {
+            ...oldUserMetadata,
+            full_name: nombre,
+          },
         });
 
       if (authUpdateError) {
@@ -447,7 +609,7 @@ export async function PATCH(request: NextRequest) {
           phone: phone || null,
         })
         .eq('id', userId)
-        .eq('tenant_id', access.profile.tenant_id);
+        .eq('tenant_id', tenantId);
 
       if (profileUpdateError) {
         const { error: rollbackError } =
@@ -457,9 +619,13 @@ export async function PATCH(request: NextRequest) {
           });
 
         if (rollbackError) {
-          console.error('Error restaurando cuenta Auth:', rollbackError);
+          console.error(
+            'Error restaurando cuenta Auth:',
+            rollbackError
+          );
+
           return respuestaError(
-            'Fall├│ la actualizaci├│n del perfil y tambi├®n su restauraci├│n en Auth. Se requiere revisi├│n administrativa.',
+            'Falló la actualización del perfil y también su restauración en Auth. Se requiere revisión administrativa.',
             500
           );
         }
@@ -476,69 +642,89 @@ export async function PATCH(request: NextRequest) {
         message: 'Datos personales actualizados correctamente.',
       });
     }
+
     // Desactivar una sola persona.
     if (action === 'deactivate') {
       const { error } = await supabaseAdmin.rpc(
         'admin_deactivate_resident',
         {
           p_user_id: userId,
-          p_tenant_id: access.profile.tenant_id,
+          p_tenant_id: tenantId,
           p_actor_id: access.user.id,
         }
       );
 
-      if (error) return respuestaError(error.message, 409);
+      if (error) {
+        return respuestaError(error.message, 409);
+      }
 
       return NextResponse.json({
         success: true,
-        message: 'Residente desactivado y asignaci├│n cerrada en el historial.',
+        message:
+          'Residente desactivado y asignación cerrada en el historial.',
       });
     }
 
-    // Reingreso expl├¡cito de una persona anterior.
+    // Reingreso explícito de una persona anterior.
     if (action === 'reentry') {
+      const housing = await obtenerConfiguracionVivienda(tenantId);
+
       if (target.is_active) {
-        return respuestaError('Esta cuenta ya est├í activa.');
+        return respuestaError(
+          'Esta cuenta ya está activa.'
+        );
       }
 
       const unitId = String(body.unitId ?? '');
       const householdRole = String(body.householdRole ?? '');
 
       if (!unitId || !['titular', 'integrante'].includes(householdRole)) {
-        return respuestaError('Selecciona una casa y un rol v├ílido.');
+        return respuestaError(
+          `Selecciona ${articuloVivienda(housing)} ${housing.singular.toLowerCase()} y un rol válido.`
+        );
       }
 
-      const validUnit = await validarCasa(
-        unitId,
-        access.profile.tenant_id
-      );
+      const validUnit = await validarUnidad(unitId, tenantId);
 
       if (!validUnit) {
-        return respuestaError('La casa no pertenece a tu conjunto.', 403);
+        return respuestaError(
+          mensajeVivienda(
+            housing,
+            'no pertenece a tu conjunto.'
+          ),
+          403
+        );
       }
 
       const { error } = await supabaseAdmin.rpc(
         'admin_assign_resident',
         {
           p_user_id: userId,
-          p_tenant_id: access.profile.tenant_id,
+          p_tenant_id: tenantId,
           p_unit_id: unitId,
           p_household_role: householdRole,
           p_actor_id: access.user.id,
         }
       );
 
-      if (error) return respuestaError(error.message, 409);
+      if (error) {
+        return respuestaError(error.message, 409);
+      }
 
       return NextResponse.json({
         success: true,
-        message: 'Reingreso registrado. Se abri├│ un nuevo periodo en el historial.',
+        message:
+          'Reingreso registrado. Se abrió un nuevo periodo en el historial.',
       });
     }
 
-    return respuestaError('Acci├│n no reconocida.');
+    return respuestaError('Acción no reconocida.');
   } catch (error) {
-    console.error('Error PATCH hogares:', error);
-    return respuestaError('Error interno al actualizar hogares.', 500);
+    console.error('Error PATCH residentes:', error);
+
+    return respuestaError(
+      'Error interno al actualizar residentes.',
+      500
+    );
   }
 }
