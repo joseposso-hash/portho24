@@ -4,9 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 import { uploadEvidence } from '../lib/evidencias-client';
-import { formatUnitLabel, HousingModel } from '../lib/tenant-config';
-
-const PINAR_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
+import { formatUnitLabel, resolveHousingModel, type HousingModel } from '../lib/tenant-config';
 
 export default function VisitasPage() {
   const router = useRouter();
@@ -51,19 +49,16 @@ export default function VisitasPage() {
         const currentTenantId = profile.tenant_id;
         setTenantId(currentTenantId);
 
-        let model: HousingModel =
-          currentTenantId === PINAR_ID ? 'houses' : 'units';
-
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
           .select('housing_model')
           .eq('id', currentTenantId)
           .maybeSingle();
 
-        if (!tenantError && tenant?.housing_model) {
-          model = tenant.housing_model as HousingModel;
-        }
-
+        const model = resolveHousingModel(
+          currentTenantId,
+          tenantError ? null : tenant?.housing_model
+        );
         setHousingModel(model);
 
         const { data: towers, error: towersError } = await supabase
