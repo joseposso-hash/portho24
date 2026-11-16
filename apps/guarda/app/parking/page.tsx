@@ -252,7 +252,7 @@ function ParkingContent() {
         if (!unit) throw new Error('Selecciona una torre y un apartamento válidos.');
       } else {
         const casaDestino = apto.trim();
-        if (!/^\\d{1,3}$/.test(casaDestino) || Number(casaDestino) < 1 || Number(casaDestino) > 460) {
+        if (!/^\d{1,3}$/.test(casaDestino) || Number(casaDestino) < 1 || Number(casaDestino) > 460) {
           throw new Error('Ingresa un número de casa válido entre 1 y 460.');
         }
         const { data: tower, error: towerError } = await supabase
@@ -922,7 +922,7 @@ function ParkingContent() {
               <div className="grid grid-cols-1 gap-4">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Número de casa</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9]{1,3}" maxLength={3} value={apto} onChange={(e) => setApto(e.target.value.replace(/\\D/g, '').slice(0, 3))} placeholder="Número de casa (1-460)" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required />
+                  <input type="text" inputMode="numeric" pattern="[0-9]{1,3}" maxLength={3} value={apto} onChange={(e) => setApto(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Número de casa (1-460)" className="mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900" required />
                 </label>
               </div>
             )}
