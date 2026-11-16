@@ -1,4 +1,4 @@
-﻿export type HousingModel = 'houses' | 'apartments' | 'units';
+export type HousingModel = 'houses' | 'apartments' | 'units';
 
 export type HousingConfig = {
   model: HousingModel;
@@ -78,4 +78,10 @@ export function formatUnitLabel(
   return tower
     ? `Torre ${tower} · Unidad ${cleanCode}`
     : `Unidad ${cleanCode}`;
+}
+
+export function formatTowerLabel(value: string | null | undefined): string {
+  const name = (value ?? '').trim();
+  if (!name) return 'Torre';
+  return /^torre\b/i.test(name) ? name : `Torre ${name}`;
 }
