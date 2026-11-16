@@ -52,7 +52,7 @@ export default function AdminAreasPage() {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profileError || !profile || profile.role !== 'admin' || profile.is_active === false || !profile.tenant_id) {
+    if (profileError || !profile || profile.role !== 'admin' || profile.is_active !== true || !profile.tenant_id) {
       router.replace(profile?.role === 'resident' ? '/residente' : profile?.role === 'guard' ? '/guarda' : '/login');
       setLoading(false);
       return;
