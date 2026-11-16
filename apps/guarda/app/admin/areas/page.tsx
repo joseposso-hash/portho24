@@ -160,6 +160,11 @@ export default function AdminAreasPage() {
       setMessageError(true);
       return;
     }
+    if (!/^[A-Za-z]{3}$/.test(form.currency.trim())) {
+      setMessage('La moneda debe ser un código de tres letras, por ejemplo COP.');
+      setMessageError(true);
+      return;
+    }
     if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1)) {
       setMessage('La capacidad debe ser un número entero mayor que cero.');
       setMessageError(true);
