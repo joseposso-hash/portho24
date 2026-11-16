@@ -22,8 +22,8 @@ export function resolveHousingModel(
 export function formatTowerLabel(towerName?: string | null): string {
   const name = String(towerName ?? '').trim();
   if (!name) return '';
-  if (/^torre\\b/i.test(name)) return name;
-  return /^\\d+$/.test(name) ? `Torre ${name}` : name;
+  if (/^torre\b/i.test(name)) return name;
+  return /^\d+$/.test(name) ? \`Torre \${name}\` : name;
 }
 
 export type HousingConfig = {
@@ -70,11 +70,11 @@ export function formatUnitLabel(
 
   if (!unitCode) return config.singular;
 
-  const unitLabel = `${config.singular} ${unitCode}`;
+  const unitLabel = \`\${config.singular} \${unitCode}\`;
 
   if (config.model === 'houses' || !towerName) {
     return unitLabel;
   }
 
-  return `${formatTowerLabel(towerName)} · ${unitLabel}`;
+  return \`\${formatTowerLabel(towerName)} · \${unitLabel}\`;
 }
