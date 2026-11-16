@@ -22,7 +22,7 @@ export default function AdminVehiculos() {
 
     let query = supabase
       .from('parking_sessions')
-      .select('*, vehicles(plate), units(code, tower_id, towers(name)), tenants(housing_model)')
+      .select('*, vehicles(plate)')
       .order('check_in_at', { ascending: false })
       .limit(100);
 
@@ -37,7 +37,42 @@ export default function AdminVehiculos() {
       console.error('Error cargando historial de vehículos:', error);
       setErrorMsg('No fue posible cargar el historial de vehículos.');
     } else {
-      setVehiculos(data || []);
+      const sessions = data || [];
+      const unitIds = Array.from(new Set(sessions.map((row: any) => row.unit_id).filter(Boolean)));
+      let unitsById = new Map<string, any>();
+
+      if (unitIds.length) {
+        const { data: unitRows, error: unitsError } = await supabase
+          .from('units')
+          .select('id, code, tower_id')
+          .in('id', unitIds);
+
+        if (unitsError) {
+          console.error('Error cargando viviendas del historial:', unitsError);
+        } else {
+          const towerIds = Array.from(new Set((unitRows || []).map((unit: any) => unit.tower_id).filter(Boolean)));
+          let towersById = new Map<string, any>();
+
+          if (towerIds.length) {
+            const { data: towerRows, error: towersError } = await supabase
+              .from('towers')
+              .select('id, name')
+              .in('id', towerIds);
+            if (towersError) console.error('Error cargando torres del historial:', towersError);
+            towersById = new Map((towerRows || []).map((tower: any) => [tower.id, tower]));
+          }
+
+          unitsById = new Map((unitRows || []).map((unit: any) => [unit.id, {
+            ...unit,
+            towers: towersById.get(unit.tower_id) || null,
+          }]));
+        }
+      }
+
+      setVehiculos(sessions.map((row: any) => ({
+        ...row,
+        units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
+      })));
     }
     setLoading(false);
   }
@@ -67,7 +102,7 @@ export default function AdminVehiculos() {
     if (unit?.code) {
       const towerRelation = unit.towers;
       const tower = Array.isArray(towerRelation) ? towerRelation[0] : towerRelation;
-      const model = resolveHousingModel(v.tenant_id, v.tenants?.housing_model);
+      const model = resolveHousingModel(v.tenant_id);
       destino = formatUnitLabel(unit.code, tower?.name, model);
     }
 
