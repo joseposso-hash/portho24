@@ -53,9 +53,9 @@ export default function AdminVehiculos() {
     let conductor = '-';
     let destino = 'No especificado';
 
-    const matchVisita = notes.match(/Visita:\\s*([^-]+)/i);
-    const matchConductor = notes.match(/Conductor:\\s*([^-]+)/i);
-    const matchDestino = notes.match(/Destino:\\s*(.+?)(?:\\s+-\\s+Doc:|$)/i);
+    const matchVisita = notes.match(/Visita:\s*([^-]+)/i);
+    const matchConductor = notes.match(/Conductor:\s*([^-]+)/i);
+    const matchDestino = notes.match(/Destino:\s*(.+?)(?:\s+-\s+Doc:|$)/i);
 
     if (matchVisita) conductor = matchVisita[1].trim();
     else if (matchConductor) conductor = matchConductor[1].trim();
