@@ -38,6 +38,24 @@ export default function AdminVehiculos() {
       setErrorMsg('No fue posible cargar el historial de vehículos.');
     } else {
       const sessions = data || [];
+      const tenantIds = Array.from(new Set(sessions.map((row: any) => row.tenant_id).filter(Boolean)));
+      const tenantModels = new Map<string, string>();
+
+      if (tenantIds.length) {
+        const { data: tenantRows, error: tenantsError } = await supabase
+          .from('tenants')
+          .select('id, housing_model')
+          .in('id', tenantIds);
+
+        if (tenantsError) {
+          console.error('Error cargando configuración de conjuntos:', tenantsError);
+        } else {
+          for (const tenant of tenantRows || []) {
+            tenantModels.set(tenant.id, tenant.housing_model || '');
+          }
+        }
+      }
+
       const unitIds = Array.from(new Set(sessions.map((row: any) => row.unit_id).filter(Boolean)));
       let unitsById = new Map<string, any>();
 
@@ -72,6 +90,7 @@ export default function AdminVehiculos() {
       setVehiculos(sessions.map((row: any) => ({
         ...row,
         units: row.unit_id ? unitsById.get(row.unit_id) || null : null,
+        housing_model: tenantModels.get(row.tenant_id) || null,
       })));
     }
     setLoading(false);
@@ -102,7 +121,7 @@ export default function AdminVehiculos() {
     if (unit?.code) {
       const towerRelation = unit.towers;
       const tower = Array.isArray(towerRelation) ? towerRelation[0] : towerRelation;
-      const model = resolveHousingModel(v.tenant_id);
+      const model = resolveHousingModel(v.tenant_id, v.housing_model);
       destino = formatUnitLabel(unit.code, tower?.name, model);
     }
 
@@ -175,10 +194,12 @@ export default function AdminVehiculos() {
                       <td className="px-4 py-3 font-bold text-slate-900">{(v.vehicles as any)?.plate || '-'}</td>
                       <td className="px-4 py-3 text-xs font-medium text-slate-700">
                         <div className="flex items-center gap-2">
-                          {v.driver_photo_url && (
-                            <EvidenceImage src={v.driver_photo_url} alt="Conductor" className="h-6 w-6 object-cover rounded-full border border-slate-200" />
+                          {v.driver_photo_url ? (
+                            <EvidenceImage src={v.driver_photo_url} alt={`Fotografía de ${d.conductor}`} className="h-10 w-10 shrink-0 object-cover rounded-full border border-slate-200 bg-slate-100" />
+                          ) : (
+                            <div className="h-10 w-10 shrink-0 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-[9px] text-slate-400">Sin foto</div>
                           )}
-                          {d.conductor}
+                          <span>{d.conductor}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs font-semibold text-[#1E3A5F]">{d.destino}</td>
