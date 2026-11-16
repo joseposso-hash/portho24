@@ -23,10 +23,7 @@ BEGIN
 END;
 $$;
 
--- Pinar de la Fontana E3: conservar modelo de casas.
-UPDATE public.tenants
-SET housing_model = 'houses'
-WHERE id = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
+-- Pinar de la Fontana E3 queda fuera de esta migración y no se modifica.
 
 -- Santa Coloma: apartamentos.
 UPDATE public.tenants
