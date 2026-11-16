@@ -1,14 +1,18 @@
-﻿export type HousingModel = 'houses' | 'apartments' | 'units';
+export type HousingModel = 'houses' | 'apartments' | 'units';
 
 const PINAR_TENANT_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
 const SANTA_COLOMA_TENANT_ID = '8c6f4e21-7d3a-4b91-9f25-6a2d8c0e51b7';
+const TERRAZZE_187_TENANT_ID = 'd8c7c4e1-7511-44d3-8b4b-65ea5608a2f7';
 
 export function resolveHousingModel(
   tenantId?: string | null,
   configuredModel?: string | null
 ): HousingModel {
   if (tenantId === PINAR_TENANT_ID) return 'houses';
-  if (tenantId === SANTA_COLOMA_TENANT_ID) return 'apartments';
+  if (
+    tenantId === SANTA_COLOMA_TENANT_ID ||
+    tenantId === TERRAZZE_187_TENANT_ID
+  ) return 'apartments';
   if (configuredModel === 'houses' || configuredModel === 'apartments' || configuredModel === 'units') {
     return configuredModel;
   }
