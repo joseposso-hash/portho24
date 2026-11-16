@@ -1,12 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 import { uploadEvidence } from '../lib/evidencias-client';
-import { formatUnitLabel, HousingModel } from '../lib/tenant-config';
-
-const PINAR_ID = '4888dce4-b74a-491f-b7d6-f2d903f2fe30';
+import { formatUnitLabel, resolveHousingModel, type HousingModel } from '../lib/tenant-config';
 
 export default function VisitasPage() {
   const router = useRouter();
@@ -22,6 +20,9 @@ export default function VisitasPage() {
   const [units, setUnits] = useState<any[]>([]);
   const [unitId, setUnitId] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
+  const [selectedTowerId, setSelectedTowerId] = useState('');
+  const towers = Array.from(new Map(units.map((unit: any) => [unit.tower_id, { id: unit.tower_id, name: unit.towerName }])).values());
+  const apartments = units.filter((unit: any) => unit.tower_id === selectedTowerId);
   const [vieneEnVehiculo, setVieneEnVehiculo] = useState(false);
   const [fotoVisitante, setFotoVisitante] = useState<File | null>(null);
 
@@ -48,19 +49,16 @@ export default function VisitasPage() {
         const currentTenantId = profile.tenant_id;
         setTenantId(currentTenantId);
 
-        let model: HousingModel =
-          currentTenantId === PINAR_ID ? 'houses' : 'units';
-
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
           .select('housing_model')
           .eq('id', currentTenantId)
           .maybeSingle();
 
-        if (!tenantError && tenant?.housing_model) {
-          model = tenant.housing_model as HousingModel;
-        }
-
+        const model = resolveHousingModel(
+          currentTenantId,
+          tenantError ? null : tenant?.housing_model
+        );
         setHousingModel(model);
 
         const { data: towers, error: towersError } = await supabase
@@ -121,6 +119,7 @@ export default function VisitasPage() {
     });
 
     setUnitId(found?.id || '');
+    if (found) setSelectedTowerId(found.tower_id);
   }
 
   async function registrarVisita(e: React.FormEvent) {
@@ -174,7 +173,7 @@ export default function VisitasPage() {
 
       if (vieneEnVehiculo) {
         router.push(
-          `/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${encodeURIComponent(documento)}&casa=${encodeURIComponent(unitSearch)}`
+          `/parking?visit_id=${visita.id}&nombre=${encodeURIComponent(nombre)}&doc=${encodeURIComponent(documento)}&casa=${encodeURIComponent(unitSearch)}&unit_id=${encodeURIComponent(unitId)}`
         );
       } else {
         setSuccess(true);
@@ -237,40 +236,31 @@ export default function VisitasPage() {
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
               <p className="text-sm font-bold text-slate-800">Destino de la visita</p>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">{housingLabel}</span>
-                <input
-                  type="text"
-                  list="housing-options"
-                  value={unitSearch}
-                  onChange={(e) => seleccionarUnidad(e.target.value)}
-                  placeholder={
-                    loadingUnits
-                      ? 'Cargando viviendas...'
-                      : housingModel === 'apartments'
-                        ? 'Ej. Torre 1 · Apartamento 101'
-                        : housingModel === 'houses'
-                          ? 'Escribe el número de casa'
-                          : 'Escribe la vivienda'
-                  }
-                  disabled={loadingUnits}
-                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 disabled:bg-slate-100"
-                  required
-                />
-                <datalist id="housing-options">
-                  {units.map((unit) => (
-                    <option
-                      key={unit.id}
-                      value={formatUnitLabel(unit.code, unit.towerName, housingModel)}
-                    />
-                  ))}
-                </datalist>
-                {unitSearch && !unitId && (
-                  <span className="mt-1 block text-xs text-amber-700">
-                    Selecciona una vivienda válida de la lista.
-                  </span>
-                )}
-              </label>
+              {housingModel === 'apartments' ? (
+                <>
+                  <label className="block">
+                    <span className="text-xs font-medium text-slate-600">Torre</span>
+                    <select value={selectedTowerId} onChange={(e) => { setSelectedTowerId(e.target.value); setUnitId(''); setUnitSearch(''); }} disabled={loadingUnits} required className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
+                      <option value="">Selecciona una torre</option>
+                      {towers.map((tower: any) => <option key={tower.id} value={tower.id}>{tower.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-slate-600">Apartamento</span>
+                    <select value={unitId} onChange={(e) => { const unit = apartments.find((item: any) => item.id === e.target.value); setUnitId(e.target.value); setUnitSearch(unit ? formatUnitLabel(unit.code, unit.towerName, housingModel) : ''); }} disabled={loadingUnits || !selectedTowerId} required className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900">
+                      <option value="">Selecciona un apartamento</option>
+                      {apartments.map((unit: any) => <option key={unit.id} value={unit.id}>{unit.code}</option>)}
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600">{housingLabel}</span>
+                  <input type="text" list="housing-options" value={unitSearch} onChange={(e) => seleccionarUnidad(e.target.value)} placeholder={loadingUnits ? 'Cargando viviendas...' : 'Escribe el número de casa'} disabled={loadingUnits} className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-900 disabled:bg-slate-100" required />
+                  <datalist id="housing-options">{units.map((unit) => <option key={unit.id} value={formatUnitLabel(unit.code, unit.towerName, housingModel)} />)}</datalist>
+                  {unitSearch && !unitId && <span className="mt-1 block text-xs text-amber-700">Selecciona una vivienda válida de la lista.</span>}
+                </label>
+              )}
             </div>
 
             <div>

@@ -60,6 +60,7 @@ const menuGroups = [
             { label: 'Directorio', href: '/admin/directorio', icon: 'users' as const },
       { label: 'Gestión de hogares', href: '/admin/residentes', icon: 'home' as const },
       { label: 'Reservas', href: '/admin/reservas', icon: 'calendar' as const },
+      { label: 'Áreas comunes', href: '/admin/areas', icon: 'home' as const },
       { label: 'PQRS', href: '/admin/pqrs', icon: 'clipboard' as const },
       { label: 'Comunicados', href: '/admin/comunicados', icon: 'megaphone' as const },
     ],
