@@ -39,7 +39,6 @@ jobs:
           curl --silent --show-error --fail-with-body \
             --retry 2 --retry-delay 5 --max-time 20 \
             --output /dev/null \
-            --write-out "Supabase responded with HTTP %{http_code}\n" \
+            --write-out "Supabase responded with HTTP %{http_code}\\n" \
             "$URL" \
-            --header "apikey: $SUPABASE_ANON_KEY" \
-            --header "Authorization: Bearer $SUPABASE_ANON_KEY"
+            --header "apikey: $SUPABASE_ANON_KEY"
